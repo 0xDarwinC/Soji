@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -8,11 +8,13 @@ interface Sticker {
   name: string;
   path: string;
   format: string;
+  pack: string;
 }
 
 function App() {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("All");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,6 +70,18 @@ function App() {
     }
   };
 
+  const packs = useMemo(() => {
+    const allPacks = Array.from(new Set(stickers.map(s => s.pack))).sort();
+    return ["All", ...allPacks];
+  }, [stickers]);
+
+  const displayedStickers = useMemo(() => {
+    if (query.length > 0) return stickers;
+    
+    if (activeTab === "All") return stickers;
+    return stickers.filter(s => s.pack === activeTab);
+  }, [stickers, query, activeTab]);
+
   return (
     <div style={{ 
       padding: "20px", 
@@ -103,6 +117,38 @@ function App() {
         }}
       />
 
+      {/* TABS BAR - Only show if not searching */}
+      {query.length === 0 && (
+          <div style={{
+              display: "flex",
+              gap: "8px",
+              overflowX: "auto",
+              paddingBottom: "10px",
+              marginBottom: "5px",
+              whiteSpace: "nowrap",
+          }}>              
+              {packs.map(pack => (
+                  <button
+                    key={pack}
+                    onClick={() => setActiveTab(pack)}
+                    style={{
+                        padding: "6px 12px",
+                        borderRadius: "15px",
+                        border: "none",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                        background: activeTab === pack ? "white" : "rgba(255,255,255,0.1)",
+                        color: activeTab === pack ? "black" : "white",
+                        transition: "all 0.2s",
+                        fontWeight: activeTab === pack ? "bold" : "normal"
+                    }}
+                  >
+                      {pack}
+                  </button>
+              ))}
+          </div>
+      )}
+
       {/* THE GRID (Scrollable Area) */}
       <div style={{ 
         flex: 1, // Fill remaining space
@@ -114,7 +160,7 @@ function App() {
         gap: "15px",
         paddingBottom: "10px"
       }}>
-        {stickers.map((s, index) => (
+        {displayedStickers.map((s, index) => (
           <div key={s.path} 
           onClick={() => handleStickerClick(s.path)}
           style={{ 

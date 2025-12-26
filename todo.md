@@ -1,0 +1,14 @@
+- [x] tabs
+- [ ] settings
+- [ ] favorites (and should dynamically update)
+- [ ] recents
+- [ ] specify sticker directory
+- [ ] save the users clipboard so we dont overwrite it
+- [ ] add your own stickers
+- [ ] resize stickers properly
+- [ ] rename and change sticker classification dynamically
+- [ ] add close button
+- [ ] hovering sticker buttons for feedback, perhaps sfx
+- [ ] make window be an offset from cursor like emoji keyboard
+- [ ] make the sleep not a sleep but an await for the decoding to finish so we are faster
+- [ ] improve ui

@@ -36,6 +36,14 @@ html, body {
   background: rgba(255, 255, 255, 0.4);
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 img {
   display: block;
   width: 100%;

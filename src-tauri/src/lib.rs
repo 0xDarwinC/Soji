@@ -22,6 +22,7 @@ pub struct Sticker {
     name: String,
     path: String,
     format: String,
+    pack: String,
     #[serde(skip)]
     score: i64,
 }
@@ -82,10 +83,19 @@ fn get_all_stickers() -> Vec<Sticker> {
             if let Some(extension) = path.extension() {
                 let ext_str = extension.to_string_lossy().to_lowercase();
                 if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
+
+                    // organize into packs
+                    let parent_name = path.parent()
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("Unknown")
+                        .to_string();
+
                     stickers.push(Sticker {
                         name: path.file_stem().unwrap().to_string_lossy().to_string(),
                         path: path.to_string_lossy().to_string(),
                         format: ext_str,
+                        pack: parent_name,
                         score: 0,
                     });
                 }
