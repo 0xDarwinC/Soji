@@ -23,7 +23,7 @@ function App() {
       height: "100vh", 
       overflowY: "auto", // Allow scrolling inside the div, not the window
       // Add a slight dark tint so text is readable on light wallpapers
-      background: "rgba(0, 0, 0, 0.2)" 
+      background: "rgba(255, 255, 255, 0.05)" 
     }}>
       <h1 style={{ marginBottom: "20px" }}>Soji Debug</h1>
       
