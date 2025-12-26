@@ -3327,6 +3327,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-opener",
  "tauri-plugin-store",
+ "walkdir",
  "window-vibrancy 0.7.1",
 ]
 

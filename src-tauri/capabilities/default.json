@@ -5,6 +5,12 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "fs:default",
+    "store:default",
+    "global-shortcut:allow-register",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$HOME/Pictures/Stickers/**"]
+    }
   ]
 }

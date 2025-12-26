@@ -1,50 +1,67 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { convertFileSrc } from "@tauri-apps/api/core"; // <--- IMPORT THIS
+
+interface Sticker {
+  name: string;
+  path: string;
+  format: string;
+}
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [stickers, setStickers] = useState<Sticker[]>([]);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    invoke<Sticker[]>("list_stickers")
+      .then((result) => setStickers(result))
+      .catch((err) => console.error(err));
+  }, []);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div style={{ 
+      padding: "20px", 
+      height: "100vh", 
+      overflowY: "auto", // Allow scrolling inside the div, not the window
+      // Add a slight dark tint so text is readable on light wallpapers
+      background: "rgba(0, 0, 0, 0.2)" 
+    }}>
+      <h1 style={{ marginBottom: "20px" }}>Soji Debug</h1>
+      
+      {/* THE GRID */}
+      <div style={{ 
+        display: "grid", 
+        gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", 
+        gap: "15px" 
+      }}>
+        {stickers.map((s) => (
+          <div key={s.path} style={{ 
+            display: "flex", 
+            flexDirection: "column", 
+            alignItems: "center",
+            padding: "10px",
+            background: "rgba(255, 255, 255, 0.1)", // Semi-transparent card
+            borderRadius: "8px",
+            backdropFilter: "blur(5px)" // Extra blur for style
+          }}>
+            {/* IMAGE PREVIEW */}
+            <img 
+              src={convertFileSrc(s.path)} // <--- CONVERT PATH HERE
+              alt={s.name}
+              style={{ 
+                width: "80px", 
+                height: "80px", 
+                objectFit: "contain", 
+                marginBottom: "10px" 
+              }} 
+            />
+            
+            <span style={{ fontSize: "12px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+              {s.name}
+            </span>
+          </div>
+        ))}
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    </div>
   );
 }
 

@@ -26,4 +26,5 @@ window-vibrancy = "0.7.1"
 tauri-plugin-global-shortcut = "2.3.1"
 tauri-plugin-fs = "2.4.4"
 tauri-plugin-store = "2.4.1"
+walkdir = "2.5.0"
 
