@@ -13,8 +13,17 @@
     "windows": [
       {
         "title": "soji",
+        "label": "main",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "decorations": false,
+        "fullscreen": false,
+        "resizable": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "center": true
       }
     ],
     "security": {
