@@ -5,6 +5,13 @@ use window_vibrancy::apply_mica;
 use std::path::Path;
 use walkdir::WalkDir;
 use serde::{Serialize, Deserialize};
+use arboard::{Clipboard, ImageData};
+use image::ImageReader;
+use image::EncodableLayout;
+use std::borrow::Cow;
+use std::thread;
+use std::time::Duration;
+use enigo::{Enigo, Key, Keyboard, Settings, Direction};
 
 pub fn run() {
     tauri::Builder::default()
@@ -15,13 +22,13 @@ pub fn run() {
                 .with_handler(handle_shortcut)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![list_stickers])
+        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
             let _ = apply_mica(&window, None);
 
-            // Shortcut: Alt + .
+            // TODO: change Alt + . to user specified shortcut
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Period);
             app.global_shortcut().register(shortcut).expect("Failed to register global shortcut");
 
@@ -47,8 +54,8 @@ fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     }
 }
 
-// list stickers from specified dir
-// The Data Model sent to Frontend
+
+// sticker data model
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sticker {
     name: String,
@@ -56,25 +63,24 @@ pub struct Sticker {
     format: String,
 }
 
-// The Command
+// list stickers from specified dir
 #[tauri::command]
 fn list_stickers() -> Vec<Sticker> {
-    // 1. Get User Home Directory (Simple way for Windows)
+    // TODO: Change this to user specified dir
     let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
     let sticker_path = Path::new(&user_profile).join("Pictures\\Stickers");
 
     let mut stickers = Vec::new();
 
-    // 2. Check if folder exists
     if !sticker_path.exists() {
-        return stickers; // Return empty if no folder
+        return stickers; 
     }
 
-    // 3. Walk directory recursively
+    // recursively search for stickers in the main path
     for entry in WalkDir::new(sticker_path).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         
-        // Filter for images only
+        // filters for support image types
         if path.is_file() {
             if let Some(extension) = path.extension() {
                 let ext_str = extension.to_string_lossy().to_lowercase();
@@ -89,6 +95,44 @@ fn list_stickers() -> Vec<Sticker> {
             }
         }
     }
-    
     stickers
+}
+
+// places the sticker in your textbox
+#[tauri::command]
+async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    let extension = path_buf.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    // hide window, since we selected the sticker
+    if let Some(window) = app.get_webview_window("main") {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+
+    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+
+    let img = ImageReader::open(&path).map_err(|e| e.to_string())?
+        .decode().map_err(|e| e.to_string())?;
+    
+    let rgba = img.into_rgba8();
+    let image_data = ImageData {
+        width: rgba.width() as usize,
+        height: rgba.height() as usize,
+        bytes: Cow::from(rgba.into_raw()),
+    };
+    clipboard.set_image(image_data).map_err(|e| e.to_string())?;
+
+    // sleep to focus, need to optimize this
+    thread::sleep(Duration::from_millis(150));
+
+    // paste the sticker
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+    enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
+    enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+    enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
+
+    Ok(())
 }

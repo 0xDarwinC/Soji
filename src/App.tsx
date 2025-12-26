@@ -17,6 +17,14 @@ function App() {
       .catch((err) => console.error(err));
   }, []);
 
+  const handleStickerClick = async (path: string) => {
+    try {
+      await invoke("select_sticker", { path });
+    } catch (error) {
+      console.error("Failed to select sticker:", error);
+    }
+  };
+
   return (
     <div style={{ 
       padding: "20px", 
@@ -34,7 +42,9 @@ function App() {
         gap: "15px" 
       }}>
         {stickers.map((s) => (
-          <div key={s.path} style={{ 
+          <div key={s.path} 
+          onClick={() => handleStickerClick(s.path)}
+          style={{ 
             display: "flex", 
             flexDirection: "column", 
             alignItems: "center",
