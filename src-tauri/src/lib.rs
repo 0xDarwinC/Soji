@@ -13,6 +13,8 @@ use std::thread;
 use std::time::Duration;
 use enigo::{Enigo, Key, Keyboard, Settings, Direction};
 use clipboard_win::{formats, Clipboard as WinClipboard, Setter};
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::clangd::ClangdMatcher;
 
 // sticker data model
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -20,6 +22,8 @@ pub struct Sticker {
     name: String,
     path: String,
     format: String,
+    #[serde(skip)]
+    score: i64,
 }
 
 pub fn run() {
@@ -31,7 +35,7 @@ pub fn run() {
                 .with_handler(handle_shortcut)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker])
+        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker, search_stickers])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
@@ -63,39 +67,38 @@ fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     }
 }
 
-// list stickers from specified dir
-#[tauri::command]
-fn list_stickers() -> Vec<Sticker> {
+// propagates stickers
+fn get_all_stickers() -> Vec<Sticker> {
     // TODO: Change this to user specified dir
     let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
     let sticker_path = Path::new(&user_profile).join("Pictures\\Stickers");
-
     let mut stickers = Vec::new();
 
-    if !sticker_path.exists() {
-        return stickers; 
-    }
+    if !sticker_path.exists() { return stickers; }
 
-    // recursively search for stickers in the main path
     for entry in WalkDir::new(sticker_path).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        
-        // filters for support image types
         if path.is_file() {
             if let Some(extension) = path.extension() {
                 let ext_str = extension.to_string_lossy().to_lowercase();
                 if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
-                    
                     stickers.push(Sticker {
                         name: path.file_stem().unwrap().to_string_lossy().to_string(),
                         path: path.to_string_lossy().to_string(),
                         format: ext_str,
+                        score: 0,
                     });
                 }
             }
         }
     }
     stickers
+}
+
+// list stickers from specified dir, just a wrapper for now
+#[tauri::command]
+fn list_stickers() -> Vec<Sticker> {
+    get_all_stickers()
 }
 
 // places the sticker in your textbox
@@ -146,4 +149,30 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
     enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+// search for stickers using fuzzy search
+#[tauri::command]
+fn search_stickers(query: String) -> Vec<Sticker> {
+    let all_stickers = get_all_stickers();
+    
+    if query.is_empty() {
+        return all_stickers;
+    }
+
+    let matcher = ClangdMatcher::default();
+    let mut matches: Vec<Sticker> = all_stickers
+        .into_iter()
+        .filter_map(|mut sticker| {
+            // fuzzy match by filename
+            matcher.fuzzy_match(&sticker.name, &query).map(|score| {
+                sticker.score = score;
+                sticker
+            })
+        })
+        .collect();
+
+    // sort by relevance
+    matches.sort_by(|a, b| b.score.cmp(&a.score));
+    matches
 }
