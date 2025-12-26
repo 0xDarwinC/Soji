@@ -30,4 +30,5 @@ walkdir = "2.5.0"
 arboard = "3.6.1"
 image = "0.25.9"
 enigo = "0.6.1"
+clipboard-win = "5.4.1"
 

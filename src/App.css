@@ -14,8 +14,8 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden; /* Stop the window from having scrollbars */
-  color: #ffffff; /* Use white text so it's readable on dark glass */
+  overflow: hidden; 
+  color: #ffffff;
 }
 
 #root {

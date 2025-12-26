@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
-use window_vibrancy::apply_mica;
+use window_vibrancy::{apply_acrylic, apply_mica};
 use std::path::Path;
 use walkdir::WalkDir;
 use serde::{Serialize, Deserialize};
@@ -12,6 +12,15 @@ use std::borrow::Cow;
 use std::thread;
 use std::time::Duration;
 use enigo::{Enigo, Key, Keyboard, Settings, Direction};
+use clipboard_win::{formats, Clipboard as WinClipboard, Setter};
+
+// sticker data model
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Sticker {
+    name: String,
+    path: String,
+    format: String,
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -26,7 +35,7 @@ pub fn run() {
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
-            let _ = apply_mica(&window, None);
+            let _ = apply_acrylic(&window, Some((0,0,0,10)));
 
             // TODO: change Alt + . to user specified shortcut
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Period);
@@ -52,15 +61,6 @@ fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
             }
         }
     }
-}
-
-
-// sticker data model
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Sticker {
-    name: String,
-    path: String,
-    format: String,
 }
 
 // list stickers from specified dir
@@ -112,18 +112,29 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
         window.hide().map_err(|e| e.to_string())?;
     }
 
-    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+    if extension == "gif" {
+        // pastes gif as file
+        let _ = (|| -> Result<(), String> {
+            let _clip = WinClipboard::new_attempts(10).map_err(|e| e.to_string())?;
+            let files = vec![path.clone()];
+            formats::FileList.write_clipboard(&files).map_err(|e| e.to_string())?;
+            Ok(())
+        })().map_err(|e| format!("Clipboard error: {}", e))?;
 
-    let img = ImageReader::open(&path).map_err(|e| e.to_string())?
-        .decode().map_err(|e| e.to_string())?;
-    
-    let rgba = img.into_rgba8();
-    let image_data = ImageData {
-        width: rgba.width() as usize,
-        height: rgba.height() as usize,
-        bytes: Cow::from(rgba.into_raw()),
-    };
-    clipboard.set_image(image_data).map_err(|e| e.to_string())?;
+    } else {
+        // for images
+        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+        let img = ImageReader::open(&path).map_err(|e| e.to_string())?
+            .decode().map_err(|e| e.to_string())?;
+        
+        let rgba = img.into_rgba8(); 
+        let image_data = ImageData {
+            width: rgba.width() as usize,
+            height: rgba.height() as usize,
+            bytes: Cow::from(rgba.into_raw()),
+        };
+        clipboard.set_image(image_data).map_err(|e| e.to_string())?;
+    }
 
     // sleep to focus, need to optimize this
     thread::sleep(Duration::from_millis(150));

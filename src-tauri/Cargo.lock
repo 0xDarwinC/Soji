@@ -4001,6 +4001,7 @@ name = "soji"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "clipboard-win",
  "enigo",
  "image",
  "serde",
