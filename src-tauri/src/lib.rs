@@ -15,6 +15,8 @@ use enigo::{Enigo, Key, Keyboard, Settings, Direction};
 use clipboard_win::{formats, Clipboard as WinClipboard, Setter};
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::clangd::ClangdMatcher;
+use std::fs;
+use std::collections::HashSet;
 
 // sticker data model
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -25,6 +27,7 @@ pub struct Sticker {
     pack: String,
     #[serde(skip)]
     score: i64,
+    is_favorite: bool,
 }
 
 pub fn run() {
@@ -36,7 +39,7 @@ pub fn run() {
                 .with_handler(handle_shortcut)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker, search_stickers, hide_window])
+        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker, search_stickers, toggle_favorite, hide_window])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
@@ -69,11 +72,20 @@ fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
 }
 
 // propagates stickers
-fn get_all_stickers() -> Vec<Sticker> {
+fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
     // TODO: Change this to user specified dir
     let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
     let sticker_path = Path::new(&user_profile).join("Pictures\\Stickers");
     let mut stickers = Vec::new();
+
+    // load favs
+    let store_path = app_handle.path().app_data_dir().unwrap().join("favorites.json");
+    let favorites: HashSet<String> = if store_path.exists() {
+        let content = fs::read_to_string(&store_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        HashSet::new()
+    };
 
     if !sticker_path.exists() { return stickers; }
 
@@ -83,6 +95,7 @@ fn get_all_stickers() -> Vec<Sticker> {
             if let Some(extension) = path.extension() {
                 let ext_str = extension.to_string_lossy().to_lowercase();
                 if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
+                    let path_str = path.to_string_lossy().to_string();
 
                     // organize into packs
                     let parent_name = path.parent()
@@ -93,10 +106,11 @@ fn get_all_stickers() -> Vec<Sticker> {
 
                     stickers.push(Sticker {
                         name: path.file_stem().unwrap().to_string_lossy().to_string(),
-                        path: path.to_string_lossy().to_string(),
+                        path: path_str.clone(),
                         format: ext_str,
                         pack: parent_name,
                         score: 0,
+                        is_favorite: favorites.contains(&path_str),
                     });
                 }
             }
@@ -105,10 +119,10 @@ fn get_all_stickers() -> Vec<Sticker> {
     stickers
 }
 
-// list stickers from specified dir, just a wrapper for now
+// list stickers from specified dir
 #[tauri::command]
-fn list_stickers() -> Vec<Sticker> {
-    get_all_stickers()
+fn list_stickers(app: AppHandle) -> Vec<Sticker> {
+    get_all_stickers(&app)
 }
 
 // places the sticker in your textbox
@@ -163,8 +177,8 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
 
 // search for stickers using fuzzy search
 #[tauri::command]
-fn search_stickers(query: String) -> Vec<Sticker> {
-    let all_stickers = get_all_stickers();
+fn search_stickers(app: AppHandle, query: String) -> Vec<Sticker> {
+    let all_stickers = get_all_stickers(&app);
     
     if query.is_empty() {
         return all_stickers;
@@ -185,6 +199,38 @@ fn search_stickers(query: String) -> Vec<Sticker> {
     // sort by relevance
     matches.sort_by(|a, b| b.score.cmp(&a.score));
     matches
+}
+
+#[tauri::command]
+fn toggle_favorite(app: AppHandle, path: String) -> bool {
+    let store_path = app.path().app_data_dir().unwrap();
+    // Ensure folder exists
+    if !store_path.exists() {
+        let _ = fs::create_dir_all(&store_path);
+    }
+    let file_path = store_path.join("favorites.json");
+
+    // Read existing
+    let mut favorites: HashSet<String> = if file_path.exists() {
+        let content = fs::read_to_string(&file_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        HashSet::new()
+    };
+
+    // Toggle
+    let is_fav = if favorites.contains(&path) {
+        favorites.remove(&path);
+        false
+    } else {
+        favorites.insert(path);
+        true
+    };
+
+    // Save
+    let _ = fs::write(file_path, serde_json::to_string(&favorites).unwrap());
+    
+    is_fav
 }
 
 #[tauri::command]

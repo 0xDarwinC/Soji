@@ -9,6 +9,7 @@ interface Sticker {
   path: string;
   format: string;
   pack: string;
+  is_favorite: boolean,
 }
 
 function App() {
@@ -72,15 +73,22 @@ function App() {
 
   const packs = useMemo(() => {
     const allPacks = Array.from(new Set(stickers.map(s => s.pack))).sort();
-    return ["All", ...allPacks];
+    return ["Favorites", "All", ...allPacks];
   }, [stickers]);
 
   const displayedStickers = useMemo(() => {
     if (query.length > 0) return stickers;
-    
+
+    if (activeTab === "Favorites") return stickers.filter(s => s.is_favorite);
     if (activeTab === "All") return stickers;
     return stickers.filter(s => s.pack === activeTab);
   }, [stickers, query, activeTab]);
+
+  const handleToggleFav = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    await invoke("toggle_favorite", { path });
+    loadStickers(query);
+  };
 
   return (
     <div style={{ 
@@ -148,7 +156,6 @@ function App() {
               ))}
           </div>
       )}
-
       {/* THE GRID (Scrollable Area) */}
       <div style={{ 
         flex: 1, // Fill remaining space
@@ -163,7 +170,8 @@ function App() {
         {displayedStickers.map((s, index) => (
           <div key={s.path} 
           onClick={() => handleStickerClick(s.path)}
-          style={{ 
+          style={{
+            position: "relative",
             display: "flex", 
             flexDirection: "column", 
             alignItems: "center",
@@ -177,6 +185,32 @@ function App() {
           onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"}
           onMouseLeave={(e) => e.currentTarget.style.background = index === 0 && query.length > 0 ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"}
           >
+            {/* 2. INSERT HEART ICON HERE (Top Right) */}
+            <div 
+                onClick={(e) => handleToggleFav(e, s.path)}
+                style={{
+                    position: "absolute",
+                    top: "5px",
+                    right: "5px",
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "50%",
+                    background: "rgba(0,0,0,0.3)", 
+                    color: s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)", 
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    zIndex: 10,
+                    transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = "#ff4d4d"}
+                onMouseLeave={(e) => e.currentTarget.style.color = s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)"}
+            >
+                ♥
+            </div>
+
             <img 
               src={convertFileSrc(s.path)}
               alt={s.name}

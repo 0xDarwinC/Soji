@@ -1,7 +1,7 @@
 - [x] tabs
 - [ ] settings
-- [ ] favorites (and should dynamically update)
-- [ ] recents
+- [x] favorites (and should dynamically update)be 
+- [ ] recents (a smart cache that saves after reboot. Should be of size 18 stickers. To determine what to leave in the cache, weigh by usage and last used. It needs to be smart in the sense that even if we used one sticker thousands of times, if its been a while since weve used it, we should weigh the ones that are more recent.)
 - [ ] specify sticker directory
 - [ ] save the users clipboard so we dont overwrite it
 - [ ] add your own stickers
