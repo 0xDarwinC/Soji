@@ -35,7 +35,7 @@ pub fn run() {
                 .with_handler(handle_shortcut)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker, search_stickers])
+        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker, search_stickers, hide_window])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
@@ -175,4 +175,11 @@ fn search_stickers(query: String) -> Vec<Sticker> {
     // sort by relevance
     matches.sort_by(|a, b| b.score.cmp(&a.score));
     matches
+}
+
+#[tauri::command]
+fn hide_window(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
 }

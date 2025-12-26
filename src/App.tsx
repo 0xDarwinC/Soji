@@ -73,6 +73,7 @@ function App() {
       padding: "20px", 
       height: "100%", 
       width: "100%",
+      overflowX: "hidden",
       overflowY: "hidden",
       boxSizing: "border-box",
       background: "transparent",
@@ -105,7 +106,8 @@ function App() {
       {/* THE GRID (Scrollable Area) */}
       <div style={{ 
         flex: 1, // Fill remaining space
-        overflowY: "auto", // Scroll THIS area
+        overflowX: "hidden",
+        overflowY: "auto",
         display: "grid", 
         gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", 
         gridAutoRows: "min-content",
