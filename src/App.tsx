@@ -28,7 +28,8 @@ function App() {
   return (
     <div style={{ 
       padding: "20px", 
-      height: "100vh", 
+      height: "100%", 
+      width: "100%",
       overflowY: "auto",
       boxSizing: "border-box",
       background: "transparent", 
