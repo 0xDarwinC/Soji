@@ -10,6 +10,7 @@ interface Sticker {
   format: string;
   pack: string;
   is_favorite: boolean,
+  rec_score: number,
 }
 
 function App() {
@@ -20,16 +21,16 @@ function App() {
 
   useEffect(() => {
     loadStickers("");
-    
-    // Auto-focus input when window gains focus (Alt + .)
-    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-        if (focused) {
-            setTimeout(() => {
-                inputRef.current?.focus();
-                // Optional: Select all text so you can overwrite previous search immediately
-                inputRef.current?.select();
-            }, 50);
-        }
+
+    // listens for the "app_shown" event from Rust
+    const unlisten = listen("app_shown", () => {
+        loadStickers(""); 
+        
+        // focus search bar
+        setTimeout(() => {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+        }, 50);
     });
 
     return () => {
@@ -73,12 +74,17 @@ function App() {
 
   const packs = useMemo(() => {
     const allPacks = Array.from(new Set(stickers.map(s => s.pack))).sort();
-    return ["Favorites", "All", ...allPacks];
+    return ["Recents", "Favorites", "All", ...allPacks];
   }, [stickers]);
 
   const displayedStickers = useMemo(() => {
     if (query.length > 0) return stickers;
-
+    if (activeTab === "Recents") {
+        return stickers
+            .filter(s => s.rec_score > 0)
+            .sort((a, b) => b.rec_score - a.rec_score)
+            .slice(0, 18); // take top 18
+    }
     if (activeTab === "Favorites") return stickers.filter(s => s.is_favorite);
     if (activeTab === "All") return stickers;
     return stickers.filter(s => s.pack === activeTab);

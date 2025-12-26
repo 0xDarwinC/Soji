@@ -1,13 +1,12 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Emitter};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
-use window_vibrancy::{apply_acrylic, apply_mica};
+use window_vibrancy::{apply_acrylic};
 use std::path::Path;
 use walkdir::WalkDir;
 use serde::{Serialize, Deserialize};
 use arboard::{Clipboard, ImageData};
 use image::ImageReader;
-use image::EncodableLayout;
 use std::borrow::Cow;
 use std::thread;
 use std::time::Duration;
@@ -17,8 +16,10 @@ use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::clangd::ClangdMatcher;
 use std::fs;
 use std::collections::HashSet;
+use chrono::{Utc};
+use std::collections::HashMap;
 
-// sticker data model
+// data models
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sticker {
     name: String,
@@ -26,8 +27,16 @@ pub struct Sticker {
     format: String,
     pack: String,
     #[serde(skip)]
-    score: i64,
+    score: i64, // used for relevance search
     is_favorite: bool,
+    rec_score: f64,
+}
+
+// used in recents classification
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct HistoryEntry {
+    count: u64,
+    last_used: i64,
 }
 
 pub fn run() {
@@ -65,10 +74,17 @@ fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
                 } else {
                     let _ = window.show();
                     let _ = window.set_focus();
+                    let _ = window.emit("app_shown", ());
                 }
             }
         }
     }
+}
+
+// decay func: count / (hrssince+2)^1.5
+fn calc_recency(entry: &HistoryEntry, now: i64) -> f64 {
+    let hours_since = (now - entry.last_used).max(0) as f64 / 3600.0;
+    (entry.count as f64) / (hours_since + 2.0).powf(1.5)
 }
 
 // propagates stickers
@@ -78,8 +94,26 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
     let sticker_path = Path::new(&user_profile).join("Pictures\\Stickers");
     let mut stickers = Vec::new();
 
+    let app_dir = app_handle.path().app_data_dir().unwrap();
+    if !app_dir.exists() { let _ = fs::create_dir_all(&app_dir); }
+
+    // load recents
+    let hist_path = app_dir.join("history.json");
+    let history: HashMap<String, HistoryEntry> = if hist_path.exists() {
+        let content = fs::read_to_string(&hist_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
+    // pick top 18 recents (will fill first 3 rows)
+    let now = Utc::now().timestamp();
+    let score_map: HashMap<String, f64> = history.iter()
+        .map(|(path, entry)| (path.clone(), calc_recency(entry, now)))
+        .collect();
+
     // load favs
-    let store_path = app_handle.path().app_data_dir().unwrap().join("favorites.json");
+    let store_path = app_dir.join("favorites.json");
     let favorites: HashSet<String> = if store_path.exists() {
         let content = fs::read_to_string(&store_path).unwrap_or_default();
         serde_json::from_str(&content).unwrap_or_default()
@@ -104,6 +138,8 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
                         .unwrap_or("Unknown")
                         .to_string();
 
+                    let recency = *score_map.get(&path_str).unwrap_or(&0.0);
+
                     stickers.push(Sticker {
                         name: path.file_stem().unwrap().to_string_lossy().to_string(),
                         path: path_str.clone(),
@@ -111,6 +147,7 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
                         pack: parent_name,
                         score: 0,
                         is_favorite: favorites.contains(&path_str),
+                        rec_score: recency,
                     });
                 }
             }
@@ -128,6 +165,29 @@ fn list_stickers(app: AppHandle) -> Vec<Sticker> {
 // places the sticker in your textbox
 #[tauri::command]
 async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
+    // update recency list due to sticker use
+    {
+        let store_path = app.path().app_data_dir().unwrap();
+        if !store_path.exists() { let _ = fs::create_dir_all(&store_path); }
+        let hist_path = store_path.join("history.json");
+        
+        let mut history: HashMap<String, HistoryEntry> = if hist_path.exists() {
+            let content = fs::read_to_string(&hist_path).unwrap_or_default();
+            serde_json::from_str(&content).unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
+
+        let now = Utc::now().timestamp();
+        let entry = history.entry(path.clone()).or_insert(HistoryEntry { count: 0, last_used: 0 });
+        entry.count += 1;
+        entry.last_used = now;
+
+        if let Ok(json) = serde_json::to_string(&history) {
+             let _ = fs::write(hist_path, json);
+        }
+    }
+    
     let path_buf = std::path::PathBuf::from(&path);
     let extension = path_buf.extension()
         .and_then(|e| e.to_str())
