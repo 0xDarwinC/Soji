@@ -20,6 +20,7 @@
     - [ ] Make async where it makes sense, dont have thread pool exhaustion
     - [ ] Only render what you need. But the objects need to exist for search
 - [ ] improve ui
+    - [ ] fix scrollbar for tags
 - [ ] release and setup executable. user should be able to determine their settings in this step. 
 - [ ] graphics for repo and demonstration video
 - [ ] graphics when no results, empty sticker folder, etc

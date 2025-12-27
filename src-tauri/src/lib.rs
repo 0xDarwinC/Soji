@@ -86,6 +86,7 @@ pub fn run() {
             wipe_data,
             apply_theme,
             refresh_library,
+            get_packs,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
@@ -98,6 +99,12 @@ pub fn run() {
             app.global_shortcut().register(shortcut).expect("Failed to register global shortcut");
             
             let app_handle = app.handle().clone();
+
+            if let Ok(cached) = load_cache(&app_handle) {
+                let state = app_handle.state::<AppState>();
+                *state.stickers.lock().unwrap() = cached;
+            }
+
             tauri::async_runtime::spawn(async move {
                 index_stickers(&app_handle);
             });
@@ -105,6 +112,27 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn get_cache_path(app_handle: &AppHandle) -> PathBuf {
+    get_app_dir(app_handle).join("library_cache.json")
+}
+
+fn load_cache(app: &AppHandle) -> Result<Vec<Sticker>, String> {
+    let path = get_cache_path(app);
+    if path.exists() {
+        let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let stickers: Vec<Sticker> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        return Ok(stickers);
+    }
+    Err("No cache".to_string())
+}
+
+fn save_cache(app: &AppHandle, stickers: &Vec<Sticker>) {
+    let path = get_cache_path(app);
+    if let Ok(json) = serde_json::to_string(stickers) {
+        let _ = fs::write(path, json);
+    }
 }
 
 // open the stickerboard
@@ -238,10 +266,22 @@ fn index_stickers(app_handle: &AppHandle) {
 
     // update global state
     let state = app_handle.state::<AppState>();
-    let mut stickers_guard = state.stickers.lock().unwrap();
-    *stickers_guard = new_stickers;
+    {
+        let mut stickers_guard = state.stickers.lock().unwrap();
+        *stickers_guard = new_stickers.clone();
+    }
     
+    save_cache(app_handle, &new_stickers);
     let _ = app_handle.emit("library_updated", ());
+}
+
+#[tauri::command]
+async fn get_packs(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let stickers = state.stickers.lock().unwrap();
+    let mut packs: Vec<String> = stickers.iter().map(|s| s.pack.clone()).collect();
+    packs.sort();
+    packs.dedup();
+    Ok(packs)
 }
 
 #[tauri::command]
@@ -325,7 +365,7 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
 
 // search for stickers using fuzzy search
 #[tauri::command]
-async fn search_stickers(state: State<'_, AppState>, query: String) -> Result<Vec<Sticker>, String> {
+async fn search_stickers(state: State<'_, AppState>, query: String, tab: String, limit: usize) -> Result<Vec<Sticker>, String> {
     let stickers_guard = state.stickers.lock().unwrap();
     let all_stickers = stickers_guard.clone();
     
@@ -333,19 +373,43 @@ async fn search_stickers(state: State<'_, AppState>, query: String) -> Result<Ve
         return Ok(all_stickers);
     }
 
-    let matcher = ClangdMatcher::default();
-    let mut matches: Vec<Sticker> = all_stickers
-        .into_iter()
-        .filter_map(|mut sticker| {
-            matcher.fuzzy_match(&sticker.name, &query).map(|score| {
-                sticker.score = score;
-                sticker
-            })
+    let mut matches: Vec<Sticker> = stickers_guard.iter()
+        .filter(|s| {
+            // Filter by Tab first
+            if tab != "All" {
+                if tab == "Recents" { if s.rec_score <= 0.0 { return false; } }
+                else if tab == "Favorites" { if !s.is_favorite { return false; } }
+                else if s.pack != tab { return false; }
+            }
+            true
         })
+        .cloned()
         .collect();
 
-    matches.sort_by(|a, b| b.score.cmp(&a.score));
+    if !query.is_empty() {
+        let matcher = ClangdMatcher::default();
+        matches = matches.into_iter()
+            .filter_map(|mut sticker| {
+                matcher.fuzzy_match(&sticker.name, &query).map(|score| {
+                    sticker.score = score;
+                    sticker
+                })
+            })
+            .collect();
+        matches.sort_by(|a, b| b.score.cmp(&a.score));
+    } else {
+        // If Recents, sort by score
+        if tab == "Recents" {
+             matches.sort_by(|a, b| b.rec_score.partial_cmp(&a.rec_score).unwrap());
+        }
+    }
+
+    if matches.len() > limit {
+        matches.truncate(limit);
+    }
+
     Ok(matches)
+
 }
 
 #[tauri::command]

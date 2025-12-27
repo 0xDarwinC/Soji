@@ -1,8 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from '@tauri-apps/plugin-dialog';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+const ITEM_MIN_WIDTH = 100;
+const GAP = 15; 
+const ROW_HEIGHT = 130;
 
 interface Sticker {
   name: string;
@@ -29,15 +34,22 @@ function App() {
       recents_limit: 18,
       theme: "acrylic"
   });
+  const [packs, setPacks] = useState<string[]>([]);
+  const activeTabRef = useRef(activeTab);
+  const queryRef = useRef(query);
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [columnCount, setColumnCount] = useState(4);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  useEffect(() => { queryRef.current = query; }, [query]);
   useEffect(() => {
-    loadStickers("");
+    refreshLibrary();
     invoke<AppSettings>("get_settings").then(setSettings);
 
     // listens for the "app_shown" event from Rust
-    const unlisten = listen("app_shown", () => {
-        loadStickers(""); 
+    const unlistenShown = listen("app_shown", () => {
+        loadStickers(queryRef.current, activeTabRef.current); 
         
         // focus search bar
         setTimeout(() => {
@@ -46,24 +58,70 @@ function App() {
         }, 50);
     });
 
+    const unlistenUpdate = listen("library_updated", () => {
+        loadStickers(queryRef.current, activeTabRef.current); 
+    });
+
     return () => {
-        unlisten.then(f => f());
+        unlistenShown.then(f => f());
+        unlistenUpdate.then(f => f());
     }
   }, []);
 
-  const loadStickers = async (searchQuery: string) => {
+  useEffect(() => {
+     invoke<string[]>("get_packs").then(setPacks);
+  }, [stickers]);
+
+  useLayoutEffect(() => {
+    const updateColumns = () => {
+      if (parentRef.current) {
+        const width = parentRef.current.offsetWidth;
+        // (width + gap) / (itemwidth + gap)
+        const cols = Math.floor((width + GAP) / (ITEM_MIN_WIDTH + GAP));
+        setColumnCount(Math.max(1, cols));
+      }
+    };
+
+    updateColumns();
+    const observer = new ResizeObserver(updateColumns);
+    if (parentRef.current) observer.observe(parentRef.current);
+
+    return () => observer.disconnect();
+  }, [showSettings]);
+
+  const refreshLibrary = async () => {
+      await invoke("refresh_library");
+      loadStickers(query, activeTab);
+  };
+
+  const loadStickers = async (searchQuery: string, currentTab: string) => {
     try {
-        const result = await invoke<Sticker[]>("search_stickers", { query: searchQuery });
+        const result = await invoke<Sticker[]>("search_stickers", { 
+            query: searchQuery, 
+            tab: currentTab, 
+            limit: 1000
+        });
         setStickers(result);
     } catch (err) {
         console.error(err);
     }
   };
 
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+    loadStickers(val, activeTab);
+  };
+
+  const handleTabClick = (pack: string) => {
+      setActiveTab(pack);
+      loadStickers(query, pack);
+  };
+
   const saveSettings = async (newSettings: AppSettings) => {
       setSettings(newSettings);
       await invoke("save_settings", { settings: newSettings });
-      loadStickers(query);
+      loadStickers(query, activeTab);
   };
 
   const handleChooseFolder = async () => {
@@ -84,7 +142,7 @@ function App() {
 
   const handleThemeChange = async (theme: string) => {
     const newSettings = { ...settings, theme };
-    saveSettings(newSettings); // This calls save_settings which triggers apply_theme in Rust
+    saveSettings(newSettings);
   };
 
   const handleWipeData = async (type: "history" | "favorites") => {
@@ -95,14 +153,9 @@ function App() {
 
       if (confirmed) {
           await invoke("wipe_data", { dataType: type });
-          loadStickers(query);
+          await invoke("refresh_library");
+          setTimeout(() => loadStickers(query, activeTab), 100);
       }
-  };
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setQuery(val);
-    loadStickers(val);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -124,29 +177,19 @@ function App() {
     }
   };
 
-  const packs = useMemo(() => {
-    const allPacks = Array.from(new Set(stickers.map(s => s.pack))).sort();
-    return ["Recents", "Favorites", "All", ...allPacks];
-  }, [stickers]);
-
-  const displayedStickers = useMemo(() => {
-    if (query.length > 0) return stickers;
-    if (activeTab === "Recents") {
-        return stickers
-            .filter(s => s.rec_score > 0)
-            .sort((a, b) => b.rec_score - a.rec_score)
-            .slice(0, settings.recents_limit);
-    }
-    if (activeTab === "Favorites") return stickers.filter(s => s.is_favorite);
-    if (activeTab === "All") return stickers;
-    return stickers.filter(s => s.pack === activeTab);
-  }, [stickers, query, activeTab, settings.recents_limit]);
-
   const handleToggleFav = async (e: React.MouseEvent, path: string) => {
     e.stopPropagation();
     await invoke("toggle_favorite", { path });
-    loadStickers(query);
+    loadStickers(query, activeTab);
   };
+
+  const rowCount = Math.ceil(stickers.length / columnCount);  
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT, // (card + gap)
+    overscan: 5,
+  });
 
   return (
     <div style={{ 
@@ -256,22 +299,113 @@ function App() {
                 style={{ width: "100%", padding: "12px", marginBottom: "15px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(0,0,0,0.3)", color: "white", fontSize: "16px", outline: "none", backdropFilter: "blur(10px)" }}
             />
 
+            {/* TABS */}
             {query.length === 0 && (
                 <div className="no-scrollbar" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "10px", marginBottom: "5px", whiteSpace: "nowrap" }}>              
-                    {packs.map(pack => (
-                        <button key={pack} onClick={() => setActiveTab(pack)} style={{ padding: "6px 12px", borderRadius: "15px", border: "none", fontSize: "13px", cursor: "pointer", background: activeTab === pack ? "white" : "rgba(255,255,255,0.1)", color: activeTab === pack ? "black" : "white", transition: "all 0.2s", fontWeight: activeTab === pack ? "bold" : "normal" }}>{pack}</button>
+                    {["Recents", "Favorites", "All", ...packs].map(pack => (
+                        <button key={pack} onClick={() => handleTabClick(pack)} style={{ padding: "6px 12px", borderRadius: "15px", border: "none", fontSize: "13px", cursor: "pointer", background: activeTab === pack ? "white" : "rgba(255,255,255,0.1)", color: activeTab === pack ? "black" : "white", transition: "all 0.2s", fontWeight: activeTab === pack ? "bold" : "normal" }}>{pack}</button>
                     ))}
                 </div>
             )}
             
-            <div style={{ flex: 1, overflowX: "hidden", overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gridAutoRows: "min-content", gap: "15px", paddingBottom: "10px" }}>
-                {displayedStickers.map((s, index) => (
-                    <div key={s.path} onClick={() => handleStickerClick(s.path)} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", padding: "10px", background: index === 0 && query.length > 0 ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)", borderRadius: "8px", backdropFilter: "blur(5px)", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"} onMouseLeave={(e) => e.currentTarget.style.background = index === 0 && query.length > 0 ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"}>
-                        <div onClick={(e) => handleToggleFav(e, s.path)} style={{ position: "absolute", top: "5px", right: "5px", width: "24px", height: "24px", borderRadius: "50%", background: "rgba(0,0,0,0.3)", color: s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", cursor: "pointer", zIndex: 10, transition: "all 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.color = "#ff4d4d"} onMouseLeave={(e) => e.currentTarget.style.color = s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)"}>♥</div>
-                        <img src={convertFileSrc(s.path)} alt={s.name} style={{ width: "80px", height: "80px", objectFit: "contain", marginBottom: "10px" }} />
-                        <span style={{ fontSize: "12px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{s.name}</span>
-                    </div>
-                ))}
+            {/* VIRTUALIZED GRID */}
+            <div 
+                ref={parentRef}
+                style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative" }}
+            >
+                {/* Total height container */}
+                <div style={{ 
+                    height: `${rowVirtualizer.getTotalSize()}px`, 
+                    width: '100%', 
+                    position: 'relative' 
+                }}>
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        // Calculate which items belong in this row
+                        const startIndex = virtualRow.index * columnCount;
+                        const rowItems = stickers.slice(startIndex, startIndex + columnCount);
+
+                        return (
+                            <div
+                                key={virtualRow.index}
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: `${virtualRow.size}px`,
+                                    transform: `translateY(${virtualRow.start}px)`,
+                                    display: 'grid',
+                                    gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
+                                    gap: `${GAP}px`,
+                                    padding: '0 5px' // Slight side padding
+                                }}
+                            >
+                                {rowItems.map((s, colIndex) => {
+                                    // Highlight logic for keyboard nav
+                                    const isFirst = (startIndex + colIndex) === 0 && query.length > 0;
+                                    
+                                    return (
+                                        <div 
+                                            key={s.path} 
+                                            onClick={() => handleStickerClick(s.path)}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = isFirst ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"}
+                                            style={{ 
+                                                display: "flex", 
+                                                flexDirection: "column", 
+                                                alignItems: "center", 
+                                                padding: "10px", 
+                                                background: isFirst ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)", 
+                                                borderRadius: "8px", 
+                                                backdropFilter: "blur(5px)", 
+                                                cursor: "pointer", 
+                                                transition: "background 0.2s",
+                                                height: "100%",
+                                                width: "100%",
+                                                minWidth: 0, 
+                                                overflow: "hidden",
+                                                boxSizing: "border-box"
+                                            }} 
+                                        >
+                                            <div 
+                                                onClick={(e) => handleToggleFav(e, s.path)} 
+                                                onMouseEnter={(e) => e.currentTarget.style.color = "#ff4d4d"}
+                                                onMouseLeave={(e) => e.currentTarget.style.color = s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)"}
+                                                style={{ 
+                                                    position: "absolute", 
+                                                    top: "5px", 
+                                                    right: "5px", 
+                                                    width: "24px", 
+                                                    height: "24px", 
+                                                    borderRadius: "50%", 
+                                                    background: "rgba(0,0,0,0.3)", 
+                                                    color: s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)", 
+                                                    display: "flex", 
+                                                    alignItems: "center", 
+                                                    justifyContent: "center", 
+                                                    fontSize: "14px", 
+                                                    cursor: "pointer", 
+                                                    zIndex: 10, 
+                                                    transition: "all 0.2s" 
+                                                }}
+                                            >
+                                                ♥
+                                            </div>
+                                            <img 
+                                                src={convertFileSrc(s.path)} 
+                                                alt={s.name} 
+                                                style={{ width: "100%", height: "80px", objectFit: "contain", marginBottom: "5px" }} 
+                                            />
+                                            <span style={{ fontSize: "12px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                                                {s.name}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
           </>
       )}
