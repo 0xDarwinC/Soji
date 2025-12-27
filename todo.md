@@ -1,10 +1,11 @@
 - [x] tabs
 - [ ] settings
     - [x] Switch from acrylic to mica for performance
-    - [ ] Wipe recency/history cache (with an extra confirmation)
-    - [ ] Wipe favorites (with an extra confirmation)
-    - [ ] Set sticker directory
+    - [x] Wipe recency/history cache (with an extra confirmation)
+    - [x] Wipe favorites (with an extra confirmation)
+    - [x] Set sticker directory
     - [x] Change size of recents cache (from 18 to whatever)
+    - [ ] Restore defaults
 - [x] favorites (and should dynamically update)be 
 - [x] recents
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
