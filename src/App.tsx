@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, ask } from '@tauri-apps/plugin-dialog';
 
 interface Sticker {
@@ -96,7 +95,7 @@ function App() {
 
       if (confirmed) {
           await invoke("wipe_data", { dataType: type });
-          loadStickers(query); // Refresh to show empty lists
+          loadStickers(query);
       }
   };
 
@@ -166,92 +165,85 @@ function App() {
           </button>
       </div>
 
-      {/* SETTINGS MODAL */}
+      {/* SETTINGS MODAL (Fixed Overlay) */}
       {showSettings && (
           <div style={{
-              position: "absolute", top: "60px", left: "20px", right: "20px", bottom: "20px",
-              background: "rgba(30, 30, 30, 0.95)", borderRadius: "10px", padding: "20px", zIndex: 100,
-              display: "flex", flexDirection: "column", gap: "20px", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.1)",
-              overflowY: "auto"
-          }}>
-              <h2 style={{ margin: "0 0 10px 0" }}>Settings</h2>
+              position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+              background: "rgba(0, 0, 0, 0.6)", zIndex: 99,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backdropFilter: "blur(5px)"
+          }} onClick={() => setShowSettings(false)}>
               
-              {/* SECTION: GENERAL */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Library</label>
+              <div 
+                onClick={(e) => e.stopPropagation()} // Prevent click from closing modal
+                style={{
+                  width: "90%", maxWidth: "400px", maxHeight: "80%",
+                  background: "rgba(30, 30, 30, 0.95)", borderRadius: "12px", padding: "25px",
+                  display: "flex", flexDirection: "column", gap: "20px", 
+                  border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+                  overflowY: "auto"
+              }}>
+                  <h2 style={{ margin: "0", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>Settings</h2>
                   
-                  {/* Folder Picker */}
-                  <div style={{ display: "flex", gap: "10px" }}>
-                      <input 
-                        readOnly 
-                        value={settings.sticker_path || "Default (Pictures/Stickers)"} 
-                        style={{ flex: 1, padding: "8px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", fontSize: "12px" }}
-                      />
-                      <button onClick={handleChooseFolder} style={{ padding: "8px 15px", borderRadius: "5px", border: "none", background: "white", color: "black", cursor: "pointer", fontWeight: "bold" }}>Change</button>
-                  </div>
-              </div>
-
-              {/* SECTION: APPEARANCE */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Appearance</label>
-                  
-                  {/* Theme Switcher */}
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                      <span style={{ fontSize: "14px" }}>Window Effect:</span>
-                      <button 
-                        onClick={() => handleThemeChange("acrylic")}
-                        style={{ padding: "6px 12px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", 
-                                 background: settings.theme === "acrylic" ? "white" : "transparent", 
-                                 color: settings.theme === "acrylic" ? "black" : "white", cursor: "pointer" }}
-                      >
-                          Acrylic
-                      </button>
-                      <button 
-                        onClick={() => handleThemeChange("mica")}
-                        style={{ padding: "6px 12px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", 
-                                 background: settings.theme === "mica" ? "white" : "transparent", 
-                                 color: settings.theme === "mica" ? "black" : "white", cursor: "pointer" }}
-                      >
-                          Mica
-                      </button>
-                  </div>
-              </div>
-
-              {/* SECTION: DATA */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Data Management</label>
-
-                  {/* Recents Limit */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: "14px" }}>Recents Limit:</span>
-                      <input 
-                        type="number"
-                        min="1" max="100"
-                        value={settings.recents_limit}
-                        onChange={(e) => saveSettings({...settings, recents_limit: parseInt(e.target.value) || 18})}
-                        style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }}
-                      />
+                  {/* GENERAL */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Library</label>
+                      <div style={{ display: "flex", gap: "10px" }}>
+                          <input 
+                            readOnly 
+                            value={settings.sticker_path || "Default (Pictures/Stickers)"} 
+                            style={{ flex: 1, padding: "8px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", fontSize: "12px" }}
+                          />
+                          <button onClick={handleChooseFolder} style={{ padding: "8px 15px", borderRadius: "5px", border: "none", background: "white", color: "black", cursor: "pointer", fontWeight: "bold" }}>Change</button>
+                      </div>
                   </div>
 
-                  {/* Wipe Buttons */}
-                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-                      <button 
-                        onClick={() => handleWipeData("history")}
-                        style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}
-                      >
-                          Wipe History
-                      </button>
-                      <button 
-                        onClick={() => handleWipeData("favorites")}
-                        style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}
-                      >
-                          Wipe Favorites
-                      </button>
+                  {/* APPEARANCE */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Appearance</label>
+                      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                          <button 
+                            onClick={() => handleThemeChange("acrylic")}
+                            style={{ flex: 1, padding: "8px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", 
+                                     background: settings.theme === "acrylic" ? "white" : "transparent", 
+                                     color: settings.theme === "acrylic" ? "black" : "white", cursor: "pointer" }}
+                          >
+                              Acrylic (Blur)
+                          </button>
+                          <button 
+                            onClick={() => handleThemeChange("mica")}
+                            style={{ flex: 1, padding: "8px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", 
+                                     background: settings.theme === "mica" ? "white" : "transparent", 
+                                     color: settings.theme === "mica" ? "black" : "white", cursor: "pointer" }}
+                          >
+                              Mica (Tint)
+                          </button>
+                      </div>
                   </div>
-              </div>
 
-              <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
-                  <button onClick={() => setShowSettings(false)} style={{ padding: "8px 20px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "white", cursor: "pointer" }}>Close</button>
+                  {/* DATA */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Data</label>
+                      
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "14px" }}>Recents Limit</span>
+                          <input 
+                            type="number" min="1" max="100"
+                            value={settings.recents_limit}
+                            onChange={(e) => saveSettings({...settings, recents_limit: parseInt(e.target.value) || 18})}
+                            style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }}
+                          />
+                      </div>
+
+                      <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
+                          <button onClick={() => handleWipeData("history")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe History</button>
+                          <button onClick={() => handleWipeData("favorites")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe Favs</button>
+                      </div>
+                  </div>
+
+                  <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowSettings(false)} style={{ padding: "8px 20px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "white", cursor: "pointer" }}>Close</button>
+                  </div>
               </div>
           </div>
       )}

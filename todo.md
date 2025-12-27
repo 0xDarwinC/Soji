@@ -1,10 +1,10 @@
 - [x] tabs
 - [ ] settings
-    - [ ] Switch from acrylic to mica for performance
+    - [x] Switch from acrylic to mica for performance
     - [ ] Wipe recency/history cache (with an extra confirmation)
     - [ ] Wipe favorites (with an extra confirmation)
     - [ ] Set sticker directory
-    - [ ] Change size of recents cache (from 18 to whatever)
+    - [x] Change size of recents cache (from 18 to whatever)
 - [x] favorites (and should dynamically update)be 
 - [x] recents
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
@@ -16,6 +16,8 @@
 - [ ] make window be an offset from cursor like emoji keyboard
 - [ ] make the sleep not a sleep but an await for the decoding to finish so we are faster
 - [ ] optimize and clean up the repository for performance. Needs to support a large amount of photos.
+    - [ ] Make async where it makes sense, dont have thread pool exhaustion
+    - [ ] Only render what you need. But the objects need to exist for search
 - [ ] improve ui
 - [ ] release and setup executable. user should be able to determine their settings in this step. 
 - [ ] graphics for repo and demonstration video

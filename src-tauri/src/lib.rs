@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use chrono::{Utc};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tauri_plugin_dialog;
 
 // data models
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,6 +66,7 @@ pub fn run() {
                 .with_handler(handle_shortcut)
                 .build(),
         )
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![list_stickers, 
             select_sticker, 
             search_stickers, 
@@ -239,8 +241,8 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
 
 // list stickers from specified dir
 #[tauri::command]
-fn list_stickers(app: AppHandle) -> Vec<Sticker> {
-    get_all_stickers(&app)
+async fn list_stickers(app: AppHandle) -> Result<Vec<Sticker>, String> {
+    Ok(get_all_stickers(&app))
 }
 
 #[tauri::command]
@@ -356,18 +358,17 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
 
 // search for stickers using fuzzy search
 #[tauri::command]
-fn search_stickers(app: AppHandle, query: String) -> Vec<Sticker> {
+async fn search_stickers(app: AppHandle, query: String) -> Result<Vec<Sticker>, String> {
     let all_stickers = get_all_stickers(&app);
     
     if query.is_empty() {
-        return all_stickers;
+        return Ok(all_stickers);
     }
 
     let matcher = ClangdMatcher::default();
     let mut matches: Vec<Sticker> = all_stickers
         .into_iter()
         .filter_map(|mut sticker| {
-            // fuzzy match by filename
             matcher.fuzzy_match(&sticker.name, &query).map(|score| {
                 sticker.score = score;
                 sticker
@@ -375,9 +376,8 @@ fn search_stickers(app: AppHandle, query: String) -> Vec<Sticker> {
         })
         .collect();
 
-    // sort by relevance
     matches.sort_by(|a, b| b.score.cmp(&a.score));
-    matches
+    Ok(matches)
 }
 
 #[tauri::command]
