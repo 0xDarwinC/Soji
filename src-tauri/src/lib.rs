@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager, Emitter};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
-use window_vibrancy::{apply_acrylic};
+use window_vibrancy::{apply_acrylic, apply_mica};
 use std::path::Path;
 use walkdir::WalkDir;
 use serde::{Serialize, Deserialize};
@@ -18,6 +18,7 @@ use std::fs;
 use std::collections::HashSet;
 use chrono::{Utc};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 // data models
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -39,6 +40,22 @@ struct HistoryEntry {
     last_used: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct AppSettings {
+    sticker_path: String,
+    recents_limit: usize,
+    theme: String,
+}
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            sticker_path: "".to_string(),
+            recents_limit: 18,
+            theme: "acrylic".to_string(),
+        }
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -48,16 +65,26 @@ pub fn run() {
                 .with_handler(handle_shortcut)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![list_stickers, select_sticker, search_stickers, toggle_favorite, hide_window])
+        .invoke_handler(tauri::generate_handler![list_stickers, 
+            select_sticker, 
+            search_stickers, 
+            toggle_favorite, 
+            hide_window,
+            get_settings,
+            save_settings,
+            wipe_data,
+            apply_theme,
+        ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
-            let _ = apply_acrylic(&window, Some((0,0,0,10)));
+            let settings = load_settings_internal(app.handle());
+            #[cfg(target_os = "windows")]
+            apply_theme_internal(&window, &settings.theme);
 
             // TODO: change Alt + . to user specified shortcut
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Period);
             app.global_shortcut().register(shortcut).expect("Failed to register global shortcut");
-
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -81,6 +108,50 @@ fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     }
 }
 
+fn get_app_dir(app_handle: &AppHandle) -> PathBuf {
+    let app_dir = app_handle.path().app_data_dir().unwrap();
+    if !app_dir.exists() { let _ = fs::create_dir_all(&app_dir); }
+    app_dir
+}
+
+fn load_settings_internal(app_handle: &AppHandle) -> AppSettings {
+    let app_dir = get_app_dir(app_handle);
+    let settings_path = app_dir.join("settings.json");
+    
+    if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        AppSettings::default()
+    }
+}
+
+fn resolve_sticker_path(app_handle: &AppHandle) -> PathBuf {
+    let settings = load_settings_internal(app_handle);
+    
+    // If setting exists and is valid, use it
+    if !settings.sticker_path.is_empty() {
+        let path = PathBuf::from(&settings.sticker_path);
+        if path.exists() {
+            return path;
+        }
+    }
+
+    // default is your pictures folder
+    let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
+    return Path::new(&user_profile).join("Pictures\\Stickers");
+}
+
+#[cfg(target_os = "windows")]
+fn apply_theme_internal(window: &tauri::WebviewWindow, theme: &str) {
+    if theme == "mica" {
+        let _ = apply_mica(window, None);
+    } else {
+        // Default to Acrylic (0,0,0,10) is a faint tint
+        let _ = apply_acrylic(window, Some((0, 0, 0, 10))); 
+    }
+}
+
 // decay func: count / (hrssince+2)^1.5
 fn calc_recency(entry: &HistoryEntry, now: i64) -> f64 {
     let hours_since = (now - entry.last_used).max(0) as f64 / 3600.0;
@@ -90,11 +161,11 @@ fn calc_recency(entry: &HistoryEntry, now: i64) -> f64 {
 // propagates stickers
 fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
     // TODO: Change this to user specified dir
-    let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
-    let sticker_path = Path::new(&user_profile).join("Pictures\\Stickers");
+    let sticker_path = resolve_sticker_path(app_handle);
+    let settings = load_settings_internal(app_handle);
+    let app_dir = get_app_dir(app_handle);
     let mut stickers = Vec::new();
 
-    let app_dir = app_handle.path().app_data_dir().unwrap();
     if !app_dir.exists() { let _ = fs::create_dir_all(&app_dir); }
 
     // load recents
@@ -106,10 +177,19 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
         HashMap::new()
     };
 
-    // pick top 18 recents (will fill first 3 rows)
+    // pick specified number of recents
     let now = Utc::now().timestamp();
     let score_map: HashMap<String, f64> = history.iter()
         .map(|(path, entry)| (path.clone(), calc_recency(entry, now)))
+        .collect();
+
+    let mut scored_list: Vec<(&String, f64)> = score_map.iter().map(|(k,v)| (k,*v)).collect();
+    
+    scored_list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    
+    let recent_paths: HashSet<String> = scored_list.into_iter()
+        .take(settings.recents_limit)
+        .map(|(p, _)| p.clone())
         .collect();
 
     // load favs
@@ -139,6 +219,7 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
                         .to_string();
 
                     let recency = *score_map.get(&path_str).unwrap_or(&0.0);
+                    let final_recency = if recent_paths.contains(&path_str) { recency } else { 0.0 };
 
                     stickers.push(Sticker {
                         name: path.file_stem().unwrap().to_string_lossy().to_string(),
@@ -147,7 +228,7 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
                         pack: parent_name,
                         score: 0,
                         is_favorite: favorites.contains(&path_str),
-                        rec_score: recency,
+                        rec_score: final_recency,
                     });
                 }
             }
@@ -160,6 +241,44 @@ fn get_all_stickers(app_handle: &AppHandle) -> Vec<Sticker> {
 #[tauri::command]
 fn list_stickers(app: AppHandle) -> Vec<Sticker> {
     get_all_stickers(&app)
+}
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> AppSettings {
+    load_settings_internal(&app)
+}
+
+#[tauri::command]
+fn save_settings(app: AppHandle, settings: AppSettings) {
+    let app_dir = get_app_dir(&app);
+    let settings_path = app_dir.join("settings.json");
+    let _ = fs::write(settings_path, serde_json::to_string(&settings).unwrap());
+    
+    #[cfg(target_os = "windows")]
+    if let Some(window) = app.get_webview_window("main") {
+        apply_theme_internal(&window, &settings.theme);
+    }
+}
+
+#[tauri::command]
+fn apply_theme(app: AppHandle, theme: String) {
+    #[cfg(target_os = "windows")]
+    if let Some(window) = app.get_webview_window("main") {
+        apply_theme_internal(&window, &theme);
+    }
+}
+
+// TODO: add safeguards
+#[tauri::command]
+fn wipe_data(app: AppHandle, data_type: String) -> bool {
+    let app_dir = get_app_dir(&app);
+    let file_name = if data_type == "history" { "history.json" } else { "favorites.json" };
+    let file_path = app_dir.join(file_name);
+    
+    if file_path.exists() {
+        return fs::remove_file(file_path).is_ok();
+    }
+    true
 }
 
 // places the sticker in your textbox

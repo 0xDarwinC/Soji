@@ -1,18 +1,22 @@
 - [x] tabs
 - [ ] settings
+    - [ ] Switch from acrylic to mica for performance
+    - [ ] Wipe recency/history cache (with an extra confirmation)
+    - [ ] Wipe favorites (with an extra confirmation)
+    - [ ] Set sticker directory
+    - [ ] Change size of recents cache (from 18 to whatever)
 - [x] favorites (and should dynamically update)be 
-- [x] recents (a smart cache that saves after reboot. Should be of size 18 stickers. To determine what to leave in the cache, weigh by usage and last used. It needs to be smart in the sense that even if we used one sticker thousands of times, if its been a while since weve used it, we should weigh the ones that are more recent.)
-- [ ] specify sticker directory
-- [ ] save the users clipboard so we dont overwrite it
-- [ ] add your own stickers
+- [x] recents
+- [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
+- [ ] add your own stickers, auto convert to supported file type
 - [ ] resize stickers properly to common sizes (discord uses 160x160), if a sticker is smaller than that maybe we shouldn't upscale to preserve resolution.
-- [ ] rename and change sticker classification dynamically (move it to a different pack)
+- [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history
 - [ ] add close button
 - [ ] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
 - [ ] make the sleep not a sleep but an await for the decoding to finish so we are faster
-- [ ] optimize and clean up the repository for performance.
+- [ ] optimize and clean up the repository for performance. Needs to support a large amount of photos.
 - [ ] improve ui
-- [ ] release and setup executable
+- [ ] release and setup executable. user should be able to determine their settings in this step. 
 - [ ] graphics for repo and demonstration video
 - [ ] graphics when no results, empty sticker folder, etc
