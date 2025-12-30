@@ -10,12 +10,15 @@ const GAP = 15;
 const ROW_HEIGHT = 130;
 
 interface Sticker {
+  id: number;
   name: string;
   path: string;
+  thumbnail_path: string;
   format: string;
   pack: string;
-  is_favorite: boolean,
-  rec_score: number,
+  is_favorite: boolean;
+  width: number;
+  height: number;
 }
 
 interface AppSettings {
@@ -35,6 +38,7 @@ function App() {
       theme: "acrylic"
   });
   const [packs, setPacks] = useState<string[]>([]);
+
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -43,11 +47,12 @@ function App() {
 
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => { queryRef.current = query; }, [query]);
+
+  // init  load
   useEffect(() => {
     refreshLibrary();
     invoke<AppSettings>("get_settings").then(setSettings);
 
-    // listens for the "app_shown" event from Rust
     const unlistenShown = listen("app_shown", () => {
         loadStickers(queryRef.current, activeTabRef.current); 
         
@@ -59,7 +64,7 @@ function App() {
     });
 
     const unlistenUpdate = listen("library_updated", () => {
-        loadStickers(queryRef.current, activeTabRef.current); 
+        loadStickers(queryRef.current, activeTabRef.current);
     });
 
     return () => {
@@ -68,6 +73,7 @@ function App() {
     }
   }, []);
 
+  // update packs list on change
   useEffect(() => {
      invoke<string[]>("get_packs").then(setPacks);
   }, [stickers]);
@@ -76,7 +82,6 @@ function App() {
     const updateColumns = () => {
       if (parentRef.current) {
         const width = parentRef.current.offsetWidth;
-        // (width + gap) / (itemwidth + gap)
         const cols = Math.floor((width + GAP) / (ITEM_MIN_WIDTH + GAP));
         setColumnCount(Math.max(1, cols));
       }
@@ -99,7 +104,7 @@ function App() {
         const result = await invoke<Sticker[]>("search_stickers", { 
             query: searchQuery, 
             tab: currentTab, 
-            limit: 1000
+            limit: 1000 
         });
         setStickers(result);
     } catch (err) {
@@ -159,11 +164,9 @@ function App() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // enter sends first sticker in list
     if (e.key === "Enter" && stickers.length > 0) {
         handleStickerClick(stickers[0].path);
     }
-    // kicks you out
     if (e.key === "Escape") {
         invoke("hide_window").catch(() => {});
     }
@@ -183,11 +186,13 @@ function App() {
     loadStickers(query, activeTab);
   };
 
-  const rowCount = Math.ceil(stickers.length / columnCount);  
+  // virtualize for performance
+  const rowCount = Math.ceil(stickers.length / columnCount);
+  
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT, // (card + gap)
+    estimateSize: () => ROW_HEIGHT,
     overscan: 5,
   });
 
@@ -208,7 +213,7 @@ function App() {
           </button>
       </div>
 
-      {/* SETTINGS MODAL (Fixed Overlay) */}
+      {/* SETTINGS MODAL */}
       {showSettings && (
           <div style={{
               position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -218,7 +223,7 @@ function App() {
           }} onClick={() => setShowSettings(false)}>
               
               <div 
-                onClick={(e) => e.stopPropagation()} // Prevent click from closing modal
+                onClick={(e) => e.stopPropagation()} 
                 style={{
                   width: "90%", maxWidth: "400px", maxHeight: "80%",
                   background: "rgba(30, 30, 30, 0.95)", borderRadius: "12px", padding: "25px",
@@ -228,7 +233,7 @@ function App() {
               }}>
                   <h2 style={{ margin: "0", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>Settings</h2>
                   
-                  {/* GENERAL */}
+                  {/* LIBRARY */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                       <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Library</label>
                       <div style={{ display: "flex", gap: "10px" }}>
@@ -267,7 +272,6 @@ function App() {
                   {/* DATA */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                       <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Data</label>
-                      
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: "14px" }}>Recents Limit</span>
                           <input 
@@ -277,7 +281,6 @@ function App() {
                             style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }}
                           />
                       </div>
-
                       <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
                           <button onClick={() => handleWipeData("history")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe History</button>
                           <button onClick={() => handleWipeData("favorites")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe Favs</button>
@@ -313,14 +316,12 @@ function App() {
                 ref={parentRef}
                 style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative" }}
             >
-                {/* Total height container */}
                 <div style={{ 
                     height: `${rowVirtualizer.getTotalSize()}px`, 
                     width: '100%', 
                     position: 'relative' 
                 }}>
                     {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                        // Calculate which items belong in this row
                         const startIndex = virtualRow.index * columnCount;
                         const rowItems = stickers.slice(startIndex, startIndex + columnCount);
 
@@ -329,19 +330,16 @@ function App() {
                                 key={virtualRow.index}
                                 style={{
                                     position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
+                                    top: 0, left: 0, width: '100%',
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                     display: 'grid',
                                     gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
                                     gap: `${GAP}px`,
-                                    padding: '0 5px' // Slight side padding
+                                    padding: '0 5px'
                                 }}
                             >
                                 {rowItems.map((s, colIndex) => {
-                                    // Highlight logic for keyboard nav
                                     const isFirst = (startIndex + colIndex) === 0 && query.length > 0;
                                     
                                     return (
@@ -361,8 +359,8 @@ function App() {
                                                 cursor: "pointer", 
                                                 transition: "background 0.2s",
                                                 height: "100%",
-                                                width: "100%",
-                                                minWidth: 0, 
+                                                width: "100%", // FORCE WIDTH FIXED
+                                                minWidth: 0, // PREVENT FLEX BLOWOUT
                                                 overflow: "hidden",
                                                 boxSizing: "border-box"
                                             }} 
@@ -372,29 +370,22 @@ function App() {
                                                 onMouseEnter={(e) => e.currentTarget.style.color = "#ff4d4d"}
                                                 onMouseLeave={(e) => e.currentTarget.style.color = s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)"}
                                                 style={{ 
-                                                    position: "absolute", 
-                                                    top: "5px", 
-                                                    right: "5px", 
-                                                    width: "24px", 
-                                                    height: "24px", 
-                                                    borderRadius: "50%", 
+                                                    position: "absolute", top: "5px", right: "5px", 
+                                                    width: "24px", height: "24px", borderRadius: "50%", 
                                                     background: "rgba(0,0,0,0.3)", 
                                                     color: s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.5)", 
-                                                    display: "flex", 
-                                                    alignItems: "center", 
-                                                    justifyContent: "center", 
-                                                    fontSize: "14px", 
-                                                    cursor: "pointer", 
-                                                    zIndex: 10, 
-                                                    transition: "all 0.2s" 
+                                                    display: "flex", alignItems: "center", justifyContent: "center", 
+                                                    fontSize: "14px", cursor: "pointer", zIndex: 10, transition: "all 0.2s" 
                                                 }}
                                             >
                                                 ♥
                                             </div>
                                             <img 
-                                                src={convertFileSrc(s.path)} 
+                                                src={convertFileSrc(s.thumbnail_path)} 
                                                 alt={s.name} 
-                                                style={{ width: "100%", height: "80px", objectFit: "contain", marginBottom: "5px" }} 
+                                                loading="eager"
+                                                decoding="async"
+                                                style={{ width: "100%", height: "80px", objectFit: "contain", marginBottom: "5px", contentVisibility: "auto" }} 
                                             />
                                             <span style={{ fontSize: "12px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
                                                 {s.name}

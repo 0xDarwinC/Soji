@@ -2,7 +2,7 @@ use tauri::{AppHandle, Manager, Emitter, State};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use window_vibrancy::{apply_acrylic, apply_mica};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use serde::{Serialize, Deserialize};
 use arboard::{Clipboard, ImageData};
@@ -12,34 +12,27 @@ use std::thread;
 use std::time::Duration;
 use enigo::{Enigo, Key, Keyboard, Settings, Direction};
 use clipboard_win::{formats, Clipboard as WinClipboard, Setter};
-use fuzzy_matcher::FuzzyMatcher;
-use fuzzy_matcher::clangd::ClangdMatcher;
 use std::fs;
-use std::collections::HashSet;
-use chrono::{Utc};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use tauri_plugin_dialog;
-use std::sync::Mutex;
+use chrono::Utc;
+use rusqlite::{Connection, ToSql};
+use sha2::{Sha256, Digest};
+use std::io::Cursor;
+use fast_image_resize as fr;
+use fr::{Resizer, ResizeOptions, ResizeAlg, FilterType, PixelType};
+use fr::images::Image;
 
 // data models
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sticker {
+    id: i64,
     name: String,
     path: String,
+    thumbnail_path: String,
     format: String,
     pack: String,
-    #[serde(skip)]
-    score: i64, // used for relevance search
     is_favorite: bool,
-    rec_score: f64,
-}
-
-// used in recents classification
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct HistoryEntry {
-    count: u64,
-    last_used: i64,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,9 +51,8 @@ impl Default for AppSettings {
     }
 }
 
-// fast access index
 struct AppState {
-    stickers: Mutex<Vec<Sticker>>,
+    db_path: PathBuf,
 }
 
 pub fn run() {
@@ -73,12 +65,34 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState {
-            stickers: Mutex::new(Vec::new()),
+        .setup(|app| {
+            let window = app.get_webview_window("main").unwrap();
+            let handle = app.handle().clone();
+            
+            let app_dir = get_app_dir(&handle);
+            let db_path = app_dir.join("library.db");
+            let thumb_dir = app_dir.join("thumbnails");
+            if !thumb_dir.exists() { let _ = fs::create_dir_all(&thumb_dir); }
+
+            init_db(&db_path).expect("Failed to init DB");
+            app.manage(AppState { db_path: db_path.clone() });
+
+            let settings = load_settings_internal(&handle);
+            #[cfg(target_os = "windows")]
+            apply_theme_internal(&window, &settings.theme);
+
+            let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Period);
+            handle.global_shortcut().register(shortcut).expect("Failed to register global shortcut");
+            
+            tauri::async_runtime::spawn(async move {
+                index_library(&handle, db_path, thumb_dir);
+            });
+
+            Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_stickers, 
-            select_sticker, 
+        .invoke_handler(tauri::generate_handler![
             search_stickers, 
+            select_sticker, 
             toggle_favorite, 
             hide_window,
             get_settings,
@@ -88,74 +102,267 @@ pub fn run() {
             refresh_library,
             get_packs,
         ])
-        .setup(|app| {
-            let window = app.get_webview_window("main").unwrap();
-
-            let settings = load_settings_internal(app.handle());
-            #[cfg(target_os = "windows")]
-            apply_theme_internal(&window, &settings.theme);
-
-            let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Period);
-            app.global_shortcut().register(shortcut).expect("Failed to register global shortcut");
-            
-            let app_handle = app.handle().clone();
-
-            if let Ok(cached) = load_cache(&app_handle) {
-                let state = app_handle.state::<AppState>();
-                *state.stickers.lock().unwrap() = cached;
-            }
-
-            tauri::async_runtime::spawn(async move {
-                index_stickers(&app_handle);
-            });
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-fn get_cache_path(app_handle: &AppHandle) -> PathBuf {
-    get_app_dir(app_handle).join("library_cache.json")
+fn init_db(path: &Path) -> rusqlite::Result<()> {
+    let conn = Connection::open(path)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS stickers (
+            id INTEGER PRIMARY KEY,
+            path TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            pack TEXT NOT NULL,
+            format TEXT NOT NULL,
+            thumbnail_path TEXT,
+            width INTEGER,
+            height INTEGER,
+            is_favorite INTEGER DEFAULT 0,
+            last_used INTEGER DEFAULT 0,
+            use_count INTEGER DEFAULT 0
+        )",
+        [],
+    )?;
+    Ok(())
 }
 
-fn load_cache(app: &AppHandle) -> Result<Vec<Sticker>, String> {
-    let path = get_cache_path(app);
-    if path.exists() {
-        let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
-        let stickers: Vec<Sticker> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        return Ok(stickers);
-    }
-    Err("No cache".to_string())
+fn get_db_conn(app: &AppHandle) -> Connection {
+    let state = app.state::<AppState>();
+    Connection::open(&state.db_path).unwrap()
 }
 
-fn save_cache(app: &AppHandle, stickers: &Vec<Sticker>) {
-    let path = get_cache_path(app);
-    if let Ok(json) = serde_json::to_string(stickers) {
-        let _ = fs::write(path, json);
-    }
+#[tauri::command]
+async fn refresh_library(app: AppHandle) {
+    let app_dir = get_app_dir(&app);
+    let db_path = app_dir.join("library.db");
+    let thumb_dir = app_dir.join("thumbnails");
+    tauri::async_runtime::spawn(async move {
+        index_library(&app, db_path, thumb_dir);
+    });
 }
 
-// open the stickerboard
-fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
-    if event.state == ShortcutState::Pressed {
-        if shortcut.matches(Modifiers::ALT, Code::Period) {
-            if let Some(window) = app.get_webview_window("main") {
-                if window.is_visible().unwrap_or(false) {
-                    let _ = window.hide();
-                } else {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    let _ = window.emit("app_shown", ());
+// fills db with thumbnails
+fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
+    let sticker_root = resolve_sticker_path(app);
+    let mut conn = Connection::open(&db_path).unwrap();
+    
+    let walker = WalkDir::new(sticker_root).into_iter();
+    let tx = conn.transaction().unwrap();
+
+    for entry in walker.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
+                    let path_str = path.to_string_lossy().to_string();
+                    
+                    // Check if exists to skip processing
+                    let exists: bool = tx.query_row(
+                        "SELECT 1 FROM stickers WHERE path = ?1", 
+                        [&path_str], 
+                        |_| Ok(true)
+                    ).unwrap_or(false);
+
+                    if !exists {
+                        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+                        let pack = path.parent().unwrap().file_name().unwrap().to_string_lossy().to_string();
+                        
+                        let thumb_path = generate_thumbnail(path, &thumb_dir);
+                        
+                        tx.execute(
+                            "INSERT INTO stickers (path, name, pack, format, thumbnail_path) VALUES (?1, ?2, ?3, ?4, ?5)",
+                            (&path_str, &name, &pack, &ext_str, &thumb_path.to_string_lossy().to_string()),
+                        ).unwrap_or_default();
+                    }
                 }
             }
         }
     }
+    tx.commit().unwrap();
+    let _ = app.emit("library_updated", ());
+}
+
+fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
+    let mut hasher = Sha256::new();
+    hasher.update(src_path.to_string_lossy().as_bytes());
+    let hash = hex::encode(hasher.finalize());
+    let dest_path = thumb_dir.join(format!("{}.webp", hash));
+
+    if dest_path.exists() {
+        return dest_path;
+    }
+
+    if let Ok(file) = std::fs::File::open(src_path) {
+        let mut reader = std::io::BufReader::new(file);
+        if let Ok(img) = image::load(&mut reader, image::ImageFormat::from_path(src_path).unwrap_or(image::ImageFormat::Png)) {
+            let width = img.width();
+            let height = img.height();
+            
+            // Target height 200px, preserve aspect ratio
+            let target_height = 200;
+            let target_width = (width as u32 * target_height) / height as u32;
+
+            let src_image = Image::from_vec_u8(
+                width,
+                height,
+                img.to_rgba8().into_raw(),
+                PixelType::U8x4,
+            ).unwrap();
+
+            let mut dst_image = Image::new(
+                target_width,
+                target_height,
+                src_image.pixel_type(),
+            );
+
+            let mut resizer = Resizer::new();
+            let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Lanczos3));
+            
+            resizer.resize(&src_image, &mut dst_image, &options).unwrap();
+
+            // Save as WebP
+            let mut result_buf = Cursor::new(Vec::new());
+            image::write_buffer_with_format(
+                &mut result_buf,
+                dst_image.buffer(),
+                target_width,
+                target_height,
+                image::ColorType::Rgba8,
+                image::ImageFormat::WebP,
+            ).unwrap();
+            
+            let _ = fs::write(&dest_path, result_buf.into_inner());
+            return dest_path;
+        }
+    }
+    // Fallback to original if resize fails
+    src_path.to_path_buf()
+}
+
+// places the sticker in your textbox
+#[tauri::command]
+async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
+    let conn = get_db_conn(&app);
+    let now = Utc::now().timestamp();
+    let _ = conn.execute(
+        "UPDATE stickers SET use_count = use_count + 1, last_used = ?1 WHERE path = ?2",
+        [&now as &dyn ToSql, &path as &dyn ToSql],
+    );
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+
+    let path_buf = PathBuf::from(&path);
+    let extension = path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+    if extension == "gif" {
+        let _ = (|| -> Result<(), String> {
+            let _clip = WinClipboard::new_attempts(10).map_err(|e| e.to_string())?;
+            let files = vec![path.clone()];
+            formats::FileList.write_clipboard(&files).map_err(|e| e.to_string())?;
+            Ok(())
+        })().map_err(|e| format!("Clipboard error: {}", e))?;
+    } else {
+        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+        let img = ImageReader::open(&path).map_err(|e| e.to_string())?.decode().map_err(|e| e.to_string())?;
+        let rgba = img.into_rgba8(); 
+        let image_data = ImageData {
+            width: rgba.width() as usize,
+            height: rgba.height() as usize,
+            bytes: Cow::from(rgba.into_raw()),
+        };
+        clipboard.set_image(image_data).map_err(|e| e.to_string())?;
+    }
+
+    thread::sleep(Duration::from_millis(150));
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+    let _ = enigo.key(Key::Control, Direction::Press);
+    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+    let _ = enigo.key(Key::Control, Direction::Release);
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn search_stickers(app: AppHandle, query: String, tab: String, limit: usize) -> Result<Vec<Sticker>, String> {
+    let conn = get_db_conn(&app);
+    let mut stmt;
+    let mut stickers = Vec::new();
+
+    let query_pattern = format!("%{}%", query);
+    let limit_val = limit as i64; 
+
+    let sql = if tab == "Recents" {
+        "SELECT id, name, path, thumbnail_path, format, pack, is_favorite, width, height FROM stickers WHERE use_count > 0 ORDER BY last_used DESC LIMIT ?1"
+    } else if tab == "Favorites" {
+        "SELECT id, name, path, thumbnail_path, format, pack, is_favorite, width, height FROM stickers WHERE is_favorite = 1 AND name LIKE ?2 LIMIT ?1"
+    } else if tab == "All" {
+        "SELECT id, name, path, thumbnail_path, format, pack, is_favorite, width, height FROM stickers WHERE name LIKE ?2 LIMIT ?1"
+    } else {
+        "SELECT id, name, path, thumbnail_path, format, pack, is_favorite, width, height FROM stickers WHERE pack = ?3 AND name LIKE ?2 LIMIT ?1"
+    };
+
+    stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+
+    let rows = if tab == "Recents" {
+        stmt.query_map(&[&limit_val as &dyn ToSql], parse_sticker)
+    } else if tab == "All" || tab == "Favorites" {
+        stmt.query_map(&[&limit_val as &dyn ToSql, &query_pattern as &dyn ToSql], parse_sticker)
+    } else {
+        stmt.query_map(&[&limit_val as &dyn ToSql, &query_pattern as &dyn ToSql, &tab as &dyn ToSql], parse_sticker)
+    };
+
+    if let Ok(itr) = rows {
+        for sticker in itr {
+            if let Ok(s) = sticker {
+                stickers.push(s);
+            }
+        }
+    }
+
+    Ok(stickers)
+}
+
+#[tauri::command]
+async fn get_packs(app: AppHandle) -> Result<Vec<String>, String> {
+    let conn = get_db_conn(&app);
+    let mut stmt = conn.prepare("SELECT DISTINCT pack FROM stickers ORDER BY pack").map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| row.get(0)).map_err(|e| e.to_string())?;
+    
+    let mut packs = Vec::new();
+    for pack in rows {
+        if let Ok(p) = pack { packs.push(p); }
+    }
+    Ok(packs)
+}
+
+#[tauri::command]
+fn toggle_favorite(app: AppHandle, path: String) -> bool {
+    let conn = get_db_conn(&app);
+    let is_fav: bool = conn.query_row(
+        "SELECT is_favorite FROM stickers WHERE path = ?1", 
+        [&path], 
+        |row| row.get(0)
+    ).unwrap_or(false);
+
+    let new_val = if is_fav { 0 } else { 1 };
+    let _ = conn.execute("UPDATE stickers SET is_favorite = ?1 WHERE path = ?2", [&new_val as &dyn ToSql, &path as &dyn ToSql]);
+    
+    !is_fav
 }
 
 fn get_app_dir(app_handle: &AppHandle) -> PathBuf {
     let app_dir = app_handle.path().app_data_dir().unwrap();
     if !app_dir.exists() { let _ = fs::create_dir_all(&app_dir); }
     app_dir
+}
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> AppSettings {
+    load_settings_internal(&app)
 }
 
 fn load_settings_internal(app_handle: &AppHandle) -> AppSettings {
@@ -168,292 +375,6 @@ fn load_settings_internal(app_handle: &AppHandle) -> AppSettings {
     } else {
         AppSettings::default()
     }
-}
-
-fn resolve_sticker_path(app_handle: &AppHandle) -> PathBuf {
-    let settings = load_settings_internal(app_handle);
-    
-    // If setting exists and is valid, use it
-    if !settings.sticker_path.is_empty() {
-        let path = PathBuf::from(&settings.sticker_path);
-        if path.exists() {
-            return path;
-        }
-    }
-
-    // default is your pictures folder
-    let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
-    return Path::new(&user_profile).join("Pictures\\Stickers");
-}
-
-// decay func: count / (hrssince+2)^1.5
-fn calc_recency(entry: &HistoryEntry, now: i64) -> f64 {
-    let hours_since = (now - entry.last_used).max(0) as f64 / 3600.0;
-    (entry.count as f64) / (hours_since + 2.0).powf(1.5)
-}
-
-// propagates stickers into index
-fn index_stickers(app_handle: &AppHandle) {
-    let sticker_path = resolve_sticker_path(app_handle);
-    let settings = load_settings_internal(app_handle);
-    let app_dir = get_app_dir(app_handle);
-    
-    let mut new_stickers = Vec::new();
-
-    // load recs
-    let hist_path = app_dir.join("history.json");
-    let history: HashMap<String, HistoryEntry> = if hist_path.exists() {
-        let content = fs::read_to_string(&hist_path).unwrap_or_default();
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
-
-    let now = Utc::now().timestamp();
-    let score_map: HashMap<String, f64> = history.iter()
-        .map(|(path, entry)| (path.clone(), calc_recency(entry, now)))
-        .collect();
-    let mut scored_list: Vec<(&String, f64)> = score_map.iter().map(|(k,v)| (k,*v)).collect();
-    scored_list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    
-    let recent_paths: HashSet<String> = scored_list.into_iter()
-        .take(settings.recents_limit)
-        .map(|(p, _)| p.clone())
-        .collect();
-
-    // load favs
-    let fav_path = app_dir.join("favorites.json");
-    let favorites: HashSet<String> = if fav_path.exists() {
-        let content = fs::read_to_string(&fav_path).unwrap_or_default();
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        HashSet::new()
-    };
-
-    if sticker_path.exists() {
-        for entry in WalkDir::new(sticker_path).into_iter().filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(extension) = path.extension() {
-                    let ext_str = extension.to_string_lossy().to_lowercase();
-                    if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
-                        let path_str = path.to_string_lossy().to_string();
-
-                        let parent_name = path.parent()
-                            .and_then(|p| p.file_name())
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("Unknown")
-                            .to_string();
-
-                        let recency = *score_map.get(&path_str).unwrap_or(&0.0);
-                        // If it's in the top N recents, keep score. Else 0.
-                        let final_recency = if recent_paths.contains(&path_str) { recency } else { 0.0 };
-
-                        new_stickers.push(Sticker {
-                            name: path.file_stem().unwrap().to_string_lossy().to_string(),
-                            path: path_str.clone(),
-                            format: ext_str,
-                            pack: parent_name,
-                            score: 0,
-                            is_favorite: favorites.contains(&path_str),
-                            rec_score: final_recency,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // update global state
-    let state = app_handle.state::<AppState>();
-    {
-        let mut stickers_guard = state.stickers.lock().unwrap();
-        *stickers_guard = new_stickers.clone();
-    }
-    
-    save_cache(app_handle, &new_stickers);
-    let _ = app_handle.emit("library_updated", ());
-}
-
-#[tauri::command]
-async fn get_packs(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    let stickers = state.stickers.lock().unwrap();
-    let mut packs: Vec<String> = stickers.iter().map(|s| s.pack.clone()).collect();
-    packs.sort();
-    packs.dedup();
-    Ok(packs)
-}
-
-#[tauri::command]
-async fn list_stickers(state: State<'_, AppState>) -> Result<Vec<Sticker>, String> {
-    let stickers = state.stickers.lock().unwrap();
-    Ok(stickers.clone())
-}
-
-// places the sticker in your textbox
-#[tauri::command]
-async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
-    // update recency list due to sticker use
-    {
-        let store_path = app.path().app_data_dir().unwrap();
-        if !store_path.exists() { let _ = fs::create_dir_all(&store_path); }
-        let hist_path = store_path.join("history.json");
-        
-        let mut history: HashMap<String, HistoryEntry> = if hist_path.exists() {
-            let content = fs::read_to_string(&hist_path).unwrap_or_default();
-            serde_json::from_str(&content).unwrap_or_default()
-        } else {
-            HashMap::new()
-        };
-
-        let now = Utc::now().timestamp();
-        let entry = history.entry(path.clone()).or_insert(HistoryEntry { count: 0, last_used: 0 });
-        entry.count += 1;
-        entry.last_used = now;
-
-        if let Ok(json) = serde_json::to_string(&history) {
-             let _ = fs::write(hist_path, json);
-        }
-    }
-    
-    let path_buf = std::path::PathBuf::from(&path);
-    let extension = path_buf.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .unwrap_or_default();
-
-    // hide window, since we selected the sticker
-    if let Some(window) = app.get_webview_window("main") {
-        window.hide().map_err(|e| e.to_string())?;
-    }
-
-    if extension == "gif" {
-        // pastes gif as file
-        let _ = (|| -> Result<(), String> {
-            let _clip = WinClipboard::new_attempts(10).map_err(|e| e.to_string())?;
-            let files = vec![path.clone()];
-            formats::FileList.write_clipboard(&files).map_err(|e| e.to_string())?;
-            Ok(())
-        })().map_err(|e| format!("Clipboard error: {}", e))?;
-
-    } else {
-        // for images
-        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-        let img = ImageReader::open(&path).map_err(|e| e.to_string())?
-            .decode().map_err(|e| e.to_string())?;
-        
-        let rgba = img.into_rgba8(); 
-        let image_data = ImageData {
-            width: rgba.width() as usize,
-            height: rgba.height() as usize,
-            bytes: Cow::from(rgba.into_raw()),
-        };
-        clipboard.set_image(image_data).map_err(|e| e.to_string())?;
-    }
-
-    // sleep to focus, need to optimize this
-    thread::sleep(Duration::from_millis(150));
-
-    // paste the sticker
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-    enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
-    enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
-    enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-// search for stickers using fuzzy search
-#[tauri::command]
-async fn search_stickers(state: State<'_, AppState>, query: String, tab: String, limit: usize) -> Result<Vec<Sticker>, String> {
-    let stickers_guard = state.stickers.lock().unwrap();
-    let all_stickers = stickers_guard.clone();
-    
-    if query.is_empty() {
-        return Ok(all_stickers);
-    }
-
-    let mut matches: Vec<Sticker> = stickers_guard.iter()
-        .filter(|s| {
-            // Filter by Tab first
-            if tab != "All" {
-                if tab == "Recents" { if s.rec_score <= 0.0 { return false; } }
-                else if tab == "Favorites" { if !s.is_favorite { return false; } }
-                else if s.pack != tab { return false; }
-            }
-            true
-        })
-        .cloned()
-        .collect();
-
-    if !query.is_empty() {
-        let matcher = ClangdMatcher::default();
-        matches = matches.into_iter()
-            .filter_map(|mut sticker| {
-                matcher.fuzzy_match(&sticker.name, &query).map(|score| {
-                    sticker.score = score;
-                    sticker
-                })
-            })
-            .collect();
-        matches.sort_by(|a, b| b.score.cmp(&a.score));
-    } else {
-        // If Recents, sort by score
-        if tab == "Recents" {
-             matches.sort_by(|a, b| b.rec_score.partial_cmp(&a.rec_score).unwrap());
-        }
-    }
-
-    if matches.len() > limit {
-        matches.truncate(limit);
-    }
-
-    Ok(matches)
-
-}
-
-#[tauri::command]
-async fn refresh_library(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        index_stickers(&app);
-    });
-}
-
-#[tauri::command]
-fn toggle_favorite(app: AppHandle, path: String) -> bool {
-    let store_path = app.path().app_data_dir().unwrap();
-    // Ensure folder exists
-    if !store_path.exists() {
-        let _ = fs::create_dir_all(&store_path);
-    }
-    let file_path = store_path.join("favorites.json");
-
-    // Read existing
-    let mut favorites: HashSet<String> = if file_path.exists() {
-        let content = fs::read_to_string(&file_path).unwrap_or_default();
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        HashSet::new()
-    };
-
-    // Toggle
-    let is_fav = if favorites.contains(&path) {
-        favorites.remove(&path);
-        false
-    } else {
-        favorites.insert(path);
-        true
-    };
-
-    // Save
-    let _ = fs::write(file_path, serde_json::to_string(&favorites).unwrap());
-    
-    is_fav
-}
-
-#[tauri::command]
-fn get_settings(app: AppHandle) -> AppSettings {
-    load_settings_internal(&app)
 }
 
 #[tauri::command]
@@ -488,19 +409,64 @@ fn apply_theme_internal(window: &tauri::WebviewWindow, theme: &str) {
 
 #[tauri::command]
 fn wipe_data(app: AppHandle, data_type: String) -> bool {
-    let app_dir = get_app_dir(&app);
-    let file_name = if data_type == "history" { "history.json" } else { "favorites.json" };
-    let file_path = app_dir.join(file_name);
-    
-    if file_path.exists() {
-        return fs::remove_file(file_path).is_ok();
+    let conn = get_db_conn(&app);
+    if data_type == "history" {
+        let _ = conn.execute("UPDATE stickers SET use_count = 0, last_used = 0", []);
+    } else if data_type == "favorites" {
+        let _ = conn.execute("UPDATE stickers SET is_favorite = 0", []);
     }
     true
+}
+
+fn resolve_sticker_path(app_handle: &AppHandle) -> PathBuf {
+    let settings = load_settings_internal(app_handle);
+    
+    // If setting exists and is valid, use it
+    if !settings.sticker_path.is_empty() {
+        let path = PathBuf::from(&settings.sticker_path);
+        if path.exists() {
+            return path;
+        }
+    }
+
+    // default is your pictures folder
+    let user_profile = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
+    return Path::new(&user_profile).join("Pictures\\Stickers");
 }
 
 #[tauri::command]
 fn hide_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
+    }
+}
+
+fn parse_sticker(row: &rusqlite::Row) -> rusqlite::Result<Sticker> {
+    Ok(Sticker {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        path: row.get(2)?,
+        thumbnail_path: row.get(3).unwrap_or(row.get(2)?), // Fallback to main path if no thumb
+        format: row.get(4)?,
+        pack: row.get(5)?,
+        is_favorite: row.get::<_, i32>(6)? == 1,
+        width: row.get(7).unwrap_or(0),
+        height: row.get(8).unwrap_or(0),
+    })
+}
+
+fn handle_shortcut(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
+    if event.state == ShortcutState::Pressed {
+        if shortcut.matches(Modifiers::ALT, Code::Period) {
+            if let Some(window) = app.get_webview_window("main") {
+                if window.is_visible().unwrap_or(false) {
+                    let _ = window.hide();
+                } else {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.emit("app_shown", ());
+                }
+            }
+        }
     }
 }
