@@ -29,6 +29,7 @@ interface AppSettings {
 
 function App() {
   const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [hoveredSticker, setHoveredSticker] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [showSettings, setShowSettings] = useState(false);
@@ -341,13 +342,16 @@ function App() {
                             >
                                 {rowItems.map((s, colIndex) => {
                                     const isFirst = (startIndex + colIndex) === 0 && query.length > 0;
-                                    
+                                    const isHovered = hoveredSticker === s.id;
+                                    const imgSrc = (s.format === 'gif' && isHovered) 
+                                        ? s.path 
+                                        : s.thumbnail_path;
                                     return (
                                         <div 
-                                            key={s.path} 
+                                            key={s.id} 
                                             onClick={() => handleStickerClick(s.path)}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = isFirst ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"}
+                                            onMouseEnter={(e) => {e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"; setHoveredSticker(s.id);}}
+                                            onMouseLeave={(e) => {e.currentTarget.style.background = isFirst ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"; setHoveredSticker(null);}}
                                             style={{ 
                                                 display: "flex", 
                                                 flexDirection: "column", 
@@ -381,7 +385,7 @@ function App() {
                                                 ♥
                                             </div>
                                             <img 
-                                                src={convertFileSrc(s.thumbnail_path)} 
+                                                src={convertFileSrc(imgSrc)} 
                                                 alt={s.name} 
                                                 loading="eager"
                                                 decoding="async"

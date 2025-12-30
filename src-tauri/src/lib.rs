@@ -1,7 +1,8 @@
-use tauri::{AppHandle, Manager, Emitter, State};
+use tauri::{AppHandle, Manager, Emitter};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use window_vibrancy::{apply_acrylic, apply_mica};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use serde::{Serialize, Deserialize};
@@ -20,6 +21,7 @@ use std::io::Cursor;
 use fast_image_resize as fr;
 use fr::{Resizer, ResizeOptions, ResizeAlg, FilterType, PixelType};
 use fr::images::Image;
+use rayon::prelude::*;
 
 // data models
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -147,8 +149,17 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     let sticker_root = resolve_sticker_path(app);
     let mut conn = Connection::open(&db_path).unwrap();
     
+    let mut existing_paths = HashSet::new();
+    {
+        let mut stmt = conn.prepare("SELECT path FROM stickers").unwrap();
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0)).unwrap();
+        for path in rows {
+            if let Ok(p) = path { existing_paths.insert(p); }
+        }
+    }
+
     let walker = WalkDir::new(sticker_root).into_iter();
-    let tx = conn.transaction().unwrap();
+    let mut candidates = Vec::new();
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -157,30 +168,52 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
                 let ext_str = ext.to_string_lossy().to_lowercase();
                 if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
                     let path_str = path.to_string_lossy().to_string();
-                    
-                    // Check if exists to skip processing
-                    let exists: bool = tx.query_row(
-                        "SELECT 1 FROM stickers WHERE path = ?1", 
-                        [&path_str], 
-                        |_| Ok(true)
-                    ).unwrap_or(false);
-
-                    if !exists {
-                        let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                        let pack = path.parent().unwrap().file_name().unwrap().to_string_lossy().to_string();
-                        
-                        let thumb_path = generate_thumbnail(path, &thumb_dir);
-                        
-                        tx.execute(
-                            "INSERT INTO stickers (path, name, pack, format, thumbnail_path) VALUES (?1, ?2, ?3, ?4, ?5)",
-                            (&path_str, &name, &pack, &ext_str, &thumb_path.to_string_lossy().to_string()),
-                        ).unwrap_or_default();
+                    if !existing_paths.contains(&path_str) {
+                        candidates.push(path.to_path_buf());
                     }
                 }
             }
         }
     }
+
+    if candidates.is_empty() {
+        return;
+    }
+
+    let new_stickers: Vec<Option<(String, String, String, String, String)>> = candidates
+        .par_iter() // Parallel Iterator
+        .map(|path| {
+            let path_str = path.to_string_lossy().to_string();
+            let name = path.file_stem().unwrap().to_string_lossy().to_string();
+            let pack = path.parent().unwrap().file_name().unwrap().to_string_lossy().to_string();
+            let ext_str = path.extension().unwrap().to_string_lossy().to_lowercase();
+            
+            let thumb_path = generate_thumbnail(path, &thumb_dir);
+            
+            Some((
+                path_str,
+                name,
+                pack,
+                ext_str,
+                thumb_path.to_string_lossy().to_string()
+            ))
+        })
+        .collect();
+
+    let tx = conn.transaction().unwrap();
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO stickers (path, name, pack, format, thumbnail_path) VALUES (?1, ?2, ?3, ?4, ?5)"
+        ).unwrap();
+
+        for item in new_stickers {
+            if let Some((path, name, pack, ext, thumb)) = item {
+                stmt.execute((&path, &name, &pack, &ext, &thumb)).unwrap_or_default();
+            }
+        }
+    }
     tx.commit().unwrap();
+    
     let _ = app.emit("library_updated", ());
 }
 
@@ -200,7 +233,6 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
             let width = img.width();
             let height = img.height();
             
-            // Target height 200px, preserve aspect ratio
             let target_height = 200;
             let target_width = (width as u32 * target_height) / height as u32;
 
@@ -222,7 +254,6 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
             
             resizer.resize(&src_image, &mut dst_image, &options).unwrap();
 
-            // Save as WebP
             let mut result_buf = Cursor::new(Vec::new());
             image::write_buffer_with_format(
                 &mut result_buf,
@@ -237,7 +268,6 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
             return dest_path;
         }
     }
-    // Fallback to original if resize fails
     src_path.to_path_buf()
 }
 
