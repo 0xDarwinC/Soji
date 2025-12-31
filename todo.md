@@ -6,6 +6,7 @@
     - [x] Wipe db (remove the database index, dont actually wipe the pictures.)
     - [x] Set sticker directory
     - [x] Change size of recents cache (from 18 to whatever)
+    - [ ] Disable animations
     - [ ] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
@@ -21,12 +22,16 @@
 - [x] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
 - [ ] make window resizable
+- [ ] system tray features
+    - [ ] exit
 - [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
     - [ ] clean up the repo to look organized and add documentation
 - [ ] improve ui
     - [x] fix scrollbar for tags
-- [ ] release and setup executable. user should be able to determine their settings in this step. 
+- [ ] release and setup executable. user should be able to determine their settings in this step.
+    - [x] Pre release and setup executable.
+    - [ ] Needs feature to determine file location, or we need to do it in app via tutorial
 - [ ] graphics for repo and demonstration video
 - [ ] graphics when no results, empty sticker folder, etc
