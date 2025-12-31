@@ -13,20 +13,20 @@
     - [x] if square, then 160x160
     - [x] if wider than tall, then preserve aspect ratio but height 160
     - [x] else preserve ratio but width 160
-    - [ ] same for gif, need to add fast gif resizer
 - [x] while adding new images to db, theres a load screen that shows progress
-- [ ] add close button
+- [x] add close button
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
 - [ ] drag drop your own stickers, auto convert to supported file type
 - [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history
-- [ ] hovering sticker buttons for feedback, perhaps sfx
+- [x] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
+- [ ] make window resizable
 - [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
     - [ ] clean up the repo to look organized and add documentation
 - [ ] improve ui
-    - [ ] fix scrollbar for tags
+    - [x] fix scrollbar for tags
 - [ ] release and setup executable. user should be able to determine their settings in this step. 
 - [ ] graphics for repo and demonstration video
 - [ ] graphics when no results, empty sticker folder, etc
