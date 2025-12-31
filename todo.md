@@ -9,10 +9,10 @@
     - [ ] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
-- [ ] resize stickers properly to common sizes (discord uses 160x160), if a sticker is smaller than that maybe we shouldn't upscale to preserve resolution.
-    - [ ] if square, then 160x160
-    - [ ] if wider than tall, then preserve aspect ratio but height 160
-    - [ ] else preserve ratio but width 160
+- [x] resize stickers properly to common sizes (discord uses 160x160), if a sticker is smaller than that maybe we shouldn't upscale to preserve resolution.
+    - [x] if square, then 160x160
+    - [x] if wider than tall, then preserve aspect ratio but height 160
+    - [x] else preserve ratio but width 160
 - [ ] fast gif resize (so its actually a sticker)
 - [ ] add close button
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.

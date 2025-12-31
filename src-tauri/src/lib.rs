@@ -233,8 +233,15 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
             let width = img.width();
             let height = img.height();
             
-            let target_height = 200;
-            let target_width = (width as u32 * target_height) / height as u32;
+            let (target_width, target_height) = if width == height {
+                (160, 160)
+            } else if width > height {
+                let w = (width as u32 * 160) / height as u32;
+                (w, 160)
+            } else {
+                let h = (height as u32 * 160) / width as u32;
+                (160, h)
+            };
 
             let src_image = Image::from_vec_u8(
                 width,
@@ -296,8 +303,21 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
             Ok(())
         })().map_err(|e| format!("Clipboard error: {}", e))?;
     } else {
+        let app_dir = get_app_dir(&app);
+        let thumb_dir = app_dir.join("thumbnails");
+        let mut hasher = Sha256::new();
+        hasher.update(path.as_bytes());
+        let hash = hex::encode(hasher.finalize());
+        let thumb_path = thumb_dir.join(format!("{}.webp", hash));
+
+        let load_path = if thumb_path.exists() {
+            thumb_path
+        } else {
+            PathBuf::from(&path)
+        };
+
         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-        let img = ImageReader::open(&path).map_err(|e| e.to_string())?.decode().map_err(|e| e.to_string())?;
+        let img = ImageReader::open(&load_path).map_err(|e| e.to_string())?.decode().map_err(|e| e.to_string())?;
         let rgba = img.into_rgba8(); 
         let image_data = ImageData {
             width: rgba.width() as usize,
