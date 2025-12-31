@@ -444,6 +444,15 @@ fn wipe_data(app: AppHandle, data_type: String) -> bool {
         let _ = conn.execute("UPDATE stickers SET use_count = 0, last_used = 0", []);
     } else if data_type == "favorites" {
         let _ = conn.execute("UPDATE stickers SET is_favorite = 0", []);
+    } else if data_type == "db" {
+        let _ = conn.execute("DELETE FROM stickers", []);
+        let _ = conn.execute("VACUUM", []);
+        let app_dir = get_app_dir(&app);
+        let thumb_dir = app_dir.join("thumbnails");
+        if thumb_dir.exists() {
+            let _ = fs::remove_dir_all(&thumb_dir);
+            let _ = fs::create_dir_all(&thumb_dir);
+        }
     }
     true
 }

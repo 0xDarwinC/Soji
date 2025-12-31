@@ -3,14 +3,18 @@
     - [x] Switch from acrylic to mica for performance
     - [x] Wipe recency/history cache (with an extra confirmation)
     - [x] Wipe favorites (with an extra confirmation)
+    - [x] Wipe db (remove the database index, dont actually wipe the pictures.)
     - [x] Set sticker directory
     - [x] Change size of recents cache (from 18 to whatever)
     - [ ] Restore defaults
-- [x] favorites (and should dynamically update)be 
+- [x] favorites (and should dynamically update)
 - [x] recents
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
-- [ ] add your own stickers, auto convert to supported file type
+- [ ] drag drop your own stickers, auto convert to supported file type
 - [ ] resize stickers properly to common sizes (discord uses 160x160), if a sticker is smaller than that maybe we shouldn't upscale to preserve resolution.
+    - [ ] if square, then 160x160
+    - [ ] if wider than tall, then preserve aspect ratio but height 160
+    - [ ] else preserve ratio but width 160
 - [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history
 - [ ] add close button
 - [ ] hovering sticker buttons for feedback, perhaps sfx

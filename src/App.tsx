@@ -151,8 +151,13 @@ function App() {
     saveSettings(newSettings);
   };
 
-  const handleWipeData = async (type: "history" | "favorites") => {
-      const confirmed = await ask(`Are you sure you want to wipe your ${type}?`, {
+  const handleWipeData = async (type: "history" | "favorites" | "db") => {
+      let message = `Are you sure you want to wipe your ${type}?`;
+      if (type === "db") {
+          message = "This will remove all stickers from the index and delete all cached thumbnails. The app will need to regenerate them, which may take time.";
+      }
+
+      const confirmed = await ask(message, {
           title: 'Confirm Wipe',
           kind: 'warning'
       });
@@ -286,10 +291,16 @@ function App() {
                           <button onClick={() => handleWipeData("history")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe History</button>
                           <button onClick={() => handleWipeData("favorites")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe Favs</button>
                       </div>
-                  </div>
-
-                  <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
-                      <button onClick={() => setShowSettings(false)} style={{ padding: "8px 20px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "white", cursor: "pointer" }}>Close</button>
+                      <button 
+                        onClick={() => handleWipeData("db")} 
+                        style={{ 
+                            width: "100%", padding: "10px", borderRadius: "5px", 
+                            border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.2)", 
+                            color: "#ff4d4d", cursor: "pointer", fontWeight: "bold" 
+                        }}
+                      >
+                        Reset Library & Cache
+                      </button>
                   </div>
               </div>
           </div>
