@@ -9,20 +9,19 @@
     - [ ] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
-- [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
-- [ ] drag drop your own stickers, auto convert to supported file type
 - [ ] resize stickers properly to common sizes (discord uses 160x160), if a sticker is smaller than that maybe we shouldn't upscale to preserve resolution.
     - [ ] if square, then 160x160
     - [ ] if wider than tall, then preserve aspect ratio but height 160
     - [ ] else preserve ratio but width 160
-- [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history
 - [ ] add close button
+- [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
+- [ ] drag drop your own stickers, auto convert to supported file type
+- [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history
 - [ ] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
-- [ ] make the sleep not a sleep but an await for the decoding to finish so we are faster
-- [ ] optimize and clean up the repository for performance. Needs to support a large amount of photos.
-    - [ ] Make async where it makes sense, dont have thread pool exhaustion
-    - [ ] Only render what you need. But the objects need to exist for search
+- [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
+    - [x] Make async where it makes sense, dont have thread pool exhaustion
+    - [x] Only render what you need. But the objects need to exist for search
 - [ ] improve ui
     - [ ] fix scrollbar for tags
 - [ ] release and setup executable. user should be able to determine their settings in this step. 
