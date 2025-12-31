@@ -46,6 +46,7 @@ struct AppSettings {
     sticker_path: String,
     recents_limit: usize,
     theme: String,
+    disable_animations: bool,
 }
 impl Default for AppSettings {
     fn default() -> Self {
@@ -53,6 +54,7 @@ impl Default for AppSettings {
             sticker_path: "".to_string(),
             recents_limit: 18,
             theme: "acrylic".to_string(),
+            disable_animations: false,
         }
     }
 }
@@ -194,7 +196,7 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
         if path.is_file() {
             if let Some(ext) = path.extension() {
                 let ext_str = ext.to_string_lossy().to_lowercase();
-                if ["png", "jpg", "jpeg", "gif", "webp"].contains(&ext_str.as_str()) {
+                if ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif"].contains(&ext_str.as_str()) {
                     let path_str = path.to_string_lossy().to_string();
                     if !existing_paths.contains(&path_str) {
                         candidates.push(path.to_path_buf());
@@ -271,7 +273,9 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
         .par_iter()
         .map(|path| {
             let path_str = path.to_string_lossy().to_string();
-            let name = path.file_stem().unwrap().to_string_lossy().to_string();
+            let mut name = path.file_stem().unwrap().to_string_lossy().to_string();
+            if name.to_lowercase().ends_with(".heic") { name = name[..name.len()-5].to_string(); }
+            if name.to_lowercase().ends_with(".heif") { name = name[..name.len()-5].to_string(); }
             let pack = path.parent().unwrap().file_name().unwrap().to_string_lossy().to_string();
             let ext_str = path.extension().unwrap().to_string_lossy().to_lowercase();
             
