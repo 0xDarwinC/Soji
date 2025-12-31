@@ -40,12 +40,27 @@ html, body {
   display: none;
 }
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 img {
   display: block;
   width: 100%;
   height: auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  border: 4px solid rgba(255, 255, 255, 0.1); /* Faint white ring */
+  border-top-color: #ffffff; /* Bright white top for rotation */
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 0.8s linear infinite;
 }

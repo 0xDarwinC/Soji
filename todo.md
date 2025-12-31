@@ -13,7 +13,8 @@
     - [x] if square, then 160x160
     - [x] if wider than tall, then preserve aspect ratio but height 160
     - [x] else preserve ratio but width 160
-- [ ] fast gif resize (so its actually a sticker)
+    - [ ] same for gif, need to add fast gif resizer
+- [x] while adding new images to db, theres a load screen that shows progress
 - [ ] add close button
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
 - [ ] drag drop your own stickers, auto convert to supported file type

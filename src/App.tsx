@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import "./App.css";
 
 const ITEM_MIN_WIDTH = 100;
 const GAP = 15; 
@@ -27,6 +28,12 @@ interface AppSettings {
   theme: string;
 }
 
+interface IndexingProgress {
+  current: number;
+  total: number;
+  eta_seconds: number | null;
+}
+
 function App() {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [hoveredSticker, setHoveredSticker] = useState<number | null>(null);
@@ -39,7 +46,7 @@ function App() {
       theme: "acrylic"
   });
   const [packs, setPacks] = useState<string[]>([]);
-
+  const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -49,15 +56,12 @@ function App() {
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => { queryRef.current = query; }, [query]);
 
-  // init  load
   useEffect(() => {
     refreshLibrary();
     invoke<AppSettings>("get_settings").then(setSettings);
 
     const unlistenShown = listen("app_shown", () => {
         loadStickers(queryRef.current, activeTabRef.current); 
-        
-        // focus search bar
         setTimeout(() => {
             inputRef.current?.focus();
             inputRef.current?.select();
@@ -65,16 +69,21 @@ function App() {
     });
 
     const unlistenUpdate = listen("library_updated", () => {
+        setIndexingProgress(null);
         loadStickers(queryRef.current, activeTabRef.current);
+    });
+
+    const unlistenProgress = listen<IndexingProgress>("indexing_progress", (event) => {
+        setIndexingProgress(event.payload);
     });
 
     return () => {
         unlistenShown.then(f => f());
         unlistenUpdate.then(f => f());
+        unlistenProgress.then(f => f());
     }
   }, []);
 
-  // update packs list on change
   useEffect(() => {
      invoke<string[]>("get_packs").then(setPacks);
   }, [stickers]);
@@ -192,9 +201,7 @@ function App() {
     loadStickers(query, activeTab);
   };
 
-  // virtualize for performance
   const rowCount = Math.ceil(stickers.length / columnCount);
-  
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
@@ -202,23 +209,55 @@ function App() {
     overscan: 5,
   });
 
+  const formatEta = (seconds: number | null) => {
+      if (seconds === null) return "Calculating ETA...";
+      if (seconds < 60) return `~${seconds}s remaining`;
+      const mins = Math.ceil(seconds / 60);
+      return `~${mins}m remaining`;
+  };
+
   return (
     <div style={{ 
       padding: "20px", height: "100%", width: "100%", overflow: "hidden", 
-      boxSizing: "border-box", background: "transparent", display: "flex", flexDirection: "column", position: "relative"
+      boxSizing: "border-box", background: "transparent", 
+      display: "flex", flexDirection: "column", position: "relative",
+      color: "white" // Force white text root
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-          <h1 style={{ margin: 0 }}>Soji</h1>
+          <h1 style={{ margin: 0, color: "white", fontSize: "28px", letterSpacing: "-1px" }}>Soji</h1>
           <button 
             onClick={() => setShowSettings(!showSettings)}
             style={{
-                background: "transparent", border: "none", color: "white", fontSize: "20px", cursor: "pointer", opacity: 0.7
+                background: "transparent", border: "none", color: "white", fontSize: "24px", cursor: "pointer", opacity: 0.8
             }}
           >
               ⚙
           </button>
       </div>
-
+      
+      {/* LOADING OVERLAY */}
+      {indexingProgress && (
+          <div style={{
+              position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+              background: "rgba(0, 0, 0, 0.75)", // Darker for contrast
+              zIndex: 200,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backdropFilter: "blur(20px)",
+              color: "white" // Force white
+          }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "25px", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
+                  <div className="spinner"></div>
+                  <h2 style={{ margin: 0, fontSize: "26px", fontWeight: "400" }}>Indexing Images...</h2>
+                  <div style={{ fontSize: "20px", opacity: 0.9, fontVariantNumeric: "tabular-nums", fontWeight: "bold" }}>
+                      {indexingProgress.current} / {indexingProgress.total}
+                  </div>
+                  <div style={{ fontSize: "14px", opacity: 0.7 }}>
+                      {formatEta(indexingProgress.eta_seconds)}
+                  </div>
+              </div>
+          </div>
+      )}
+      
       {/* SETTINGS MODAL */}
       {showSettings && (
           <div style={{
@@ -235,13 +274,14 @@ function App() {
                   background: "rgba(30, 30, 30, 0.95)", borderRadius: "12px", padding: "25px",
                   display: "flex", flexDirection: "column", gap: "20px", 
                   border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-                  overflowY: "auto"
+                  overflowY: "auto",
+                  color: "white" // Force white text in modal
               }}>
-                  <h2 style={{ margin: "0", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>Settings</h2>
+                  <h2 style={{ margin: "0", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px", color: "white" }}>Settings</h2>
                   
                   {/* LIBRARY */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Library</label>
+                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px", color: "white" }}>Library</label>
                       <div style={{ display: "flex", gap: "10px" }}>
                           <input 
                             readOnly 
@@ -254,7 +294,7 @@ function App() {
 
                   {/* APPEARANCE */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Appearance</label>
+                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px", color: "white" }}>Appearance</label>
                       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                           <button 
                             onClick={() => handleThemeChange("acrylic")}
@@ -277,9 +317,9 @@ function App() {
 
                   {/* DATA */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px" }}>Data</label>
+                      <label style={{ fontSize: "12px", opacity: 0.7, textTransform: "uppercase", letterSpacing: "1px", color: "white" }}>Data</label>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "14px" }}>Recents Limit</span>
+                          <span style={{ fontSize: "14px", color: "white" }}>Recents Limit</span>
                           <input 
                             type="number" min="1" max="100"
                             value={settings.recents_limit}
@@ -374,8 +414,8 @@ function App() {
                                                 cursor: "pointer", 
                                                 transition: "background 0.2s",
                                                 height: "100%",
-                                                width: "100%", // FORCE WIDTH FIXED
-                                                minWidth: 0, // PREVENT FLEX BLOWOUT
+                                                width: "100%",
+                                                minWidth: 0,
                                                 overflow: "hidden",
                                                 boxSizing: "border-box"
                                             }} 
@@ -402,7 +442,7 @@ function App() {
                                                 decoding="async"
                                                 style={{ width: "100%", height: "80px", objectFit: "contain", marginBottom: "5px", contentVisibility: "auto" }} 
                                             />
-                                            <span style={{ fontSize: "12px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                                            <span style={{ fontSize: "12px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", color: "white" }}>
                                                 {s.name}
                                             </span>
                                         </div>

@@ -22,6 +22,10 @@ use fast_image_resize as fr;
 use fr::{Resizer, ResizeOptions, ResizeAlg, FilterType, PixelType};
 use fr::images::Image;
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::time::Instant;
+
 
 // data models
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -55,6 +59,21 @@ impl Default for AppSettings {
 
 struct AppState {
     db_path: PathBuf,
+    is_indexing: Arc<AtomicBool>,
+}
+
+#[derive(Clone, Serialize)]
+struct ProgressPayload {
+    current: usize,
+    total: usize,
+    eta_seconds: Option<u64>,
+}
+
+struct IndexingGuard(Arc<AtomicBool>);
+impl Drop for IndexingGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
 }
 
 pub fn run() {
@@ -77,7 +96,10 @@ pub fn run() {
             if !thumb_dir.exists() { let _ = fs::create_dir_all(&thumb_dir); }
 
             init_db(&db_path).expect("Failed to init DB");
-            app.manage(AppState { db_path: db_path.clone() });
+            app.manage(AppState { 
+                db_path: db_path.clone(),
+                is_indexing: Arc::new(AtomicBool::new(false)) 
+            });
 
             let settings = load_settings_internal(&handle);
             #[cfg(target_os = "windows")]
@@ -146,6 +168,12 @@ async fn refresh_library(app: AppHandle) {
 
 // fills db with thumbnails
 fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
+    let state = app.state::<AppState>();
+    if state.is_indexing.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return;
+    }
+    let _guard = IndexingGuard(state.is_indexing.clone());
+
     let sticker_root = resolve_sticker_path(app);
     let mut conn = Connection::open(&db_path).unwrap();
     
@@ -180,8 +208,67 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
         return;
     }
 
+    let total_candidates = candidates.len();
+    let processed_count = Arc::new(AtomicUsize::new(0));
+    let processed_counter_monitor = processed_count.clone();
+    let app_handle_monitor = app.clone();
+    
+    thread::spawn(move || {
+        let start_time = Instant::now();
+        let mut last_check = Instant::now();
+        let mut last_count = 0;
+        let mut smoothed_rate: f64 = 0.0;
+
+        loop {
+            thread::sleep(Duration::from_millis(250));
+            let current = processed_counter_monitor.load(Ordering::Relaxed);
+            
+            let now = Instant::now();
+            let elapsed_total = now.duration_since(start_time).as_secs_f64();
+            let elapsed_since_last = now.duration_since(last_check).as_secs_f64();
+            
+            let eta = if current > 0 && elapsed_total > 1.0 {
+                let delta_items = (current - last_count) as f64;
+                
+                let instant_rate = if elapsed_since_last > 0.0 {
+                    delta_items / elapsed_since_last
+                } else {
+                    0.0
+                };
+
+                if smoothed_rate == 0.0 {
+                    smoothed_rate = instant_rate;
+                } else {
+                    smoothed_rate = 0.3 * instant_rate + 0.7 * smoothed_rate;
+                }
+
+                if smoothed_rate > 0.1 {
+                    let remaining = total_candidates.saturating_sub(current);
+                    Some((remaining as f64 / smoothed_rate) as u64)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            last_count = current;
+            last_check = now;
+
+            let _ = app_handle_monitor.emit("indexing_progress", ProgressPayload {
+                current,
+                total: total_candidates,
+                eta_seconds: eta
+            });
+
+            if current >= total_candidates {
+                break;
+            }
+        }
+    });
+
     let new_stickers: Vec<Option<(String, String, String, String, String)>> = candidates
-        .par_iter() // Parallel Iterator
+        .par_iter()
         .map(|path| {
             let path_str = path.to_string_lossy().to_string();
             let name = path.file_stem().unwrap().to_string_lossy().to_string();
@@ -190,6 +277,8 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
             
             let thumb_path = generate_thumbnail(path, &thumb_dir);
             
+            processed_count.fetch_add(1, Ordering::Relaxed);
+
             Some((
                 path_str,
                 name,
@@ -214,6 +303,13 @@ fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     }
     tx.commit().unwrap();
     
+    let _ = app.emit("indexing_progress", ProgressPayload {
+        current: total_candidates,
+        total: total_candidates,
+        eta_seconds: Some(0)
+    });
+    
+    thread::sleep(Duration::from_millis(500));
     let _ = app.emit("library_updated", ());
 }
 
