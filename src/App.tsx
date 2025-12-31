@@ -63,6 +63,11 @@ function App() {
         refreshLibrary();
         invoke<AppSettings>("get_settings").then(setSettings);
 
+        const handleContextMenu = (e: Event) => {
+            e.preventDefault();
+        };
+        document.addEventListener('contextmenu', handleContextMenu);
+
         const unlistenShown = listen("app_shown", () => {
             loadStickers(queryRef.current, activeTabRef.current);
             setTimeout(() => {
