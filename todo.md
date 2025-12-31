@@ -13,6 +13,7 @@
     - [ ] if square, then 160x160
     - [ ] if wider than tall, then preserve aspect ratio but height 160
     - [ ] else preserve ratio but width 160
+- [ ] fast gif resize (so its actually a sticker)
 - [ ] add close button
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
 - [ ] drag drop your own stickers, auto convert to supported file type
@@ -22,6 +23,7 @@
 - [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
+    - [ ] clean up the repo to look organized and add documentation
 - [ ] improve ui
     - [ ] fix scrollbar for tags
 - [ ] release and setup executable. user should be able to determine their settings in this step. 
