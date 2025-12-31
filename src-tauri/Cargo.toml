@@ -34,7 +34,7 @@ clipboard-win = "5.4.1"
 fuzzy-matcher = "0.3.7"
 chrono = "0.4.42"
 tauri-plugin-dialog = "2.4.2"
-rusqlite = "0.38.0"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 fast_image_resize = "5.4.0"
 sha2 = "0.10.9"
 hex = "0.4.3"
