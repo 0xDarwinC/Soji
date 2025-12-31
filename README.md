@@ -1,7 +1,13 @@
-# Tauri + React + Typescript
+# Soji
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Soji is a performant rust-tauri sticker picker for Windows 11. Functions similarly to the windows emoji keyboard (Win + .) but focuses on user-curated image assets (PNG, WebP, GIF).
 
-## Recommended IDE Setup
+Stickers are sorted via directories. You can fuzzy search for a sticker by name.
+You can also favorite stickers, and there's a recents tab.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+The first index of your images will take a few minutes if you have thousands, but subsequent startups and searches are instantaneous.
+
+Controls:
+Alt + . : Open the sticker keyboard
+Esc: Closes the sticker keyboard
+Enter: Sends the first sticker in your 
