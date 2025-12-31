@@ -26,6 +26,7 @@ interface AppSettings {
     sticker_path: string;
     recents_limit: number;
     theme: string;
+    disable_animations: boolean;
 }
 
 interface IndexingProgress {
@@ -43,7 +44,8 @@ function App() {
     const [settings, setSettings] = useState<AppSettings>({
         sticker_path: "",
         recents_limit: 18,
-        theme: "acrylic"
+        theme: "acrylic",
+        disable_animations: false
     });
     const [packs, setPacks] = useState<string[]>([]);
     const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
@@ -92,7 +94,7 @@ function App() {
     useLayoutEffect(() => {
         const updateColumns = () => {
             if (parentRef.current) {
-                const width = parentRef.current.offsetWidth - 20;
+                const width = parentRef.current.offsetWidth - 40;
                 const cols = Math.floor((width + GAP) / (ITEM_MIN_WIDTH + GAP));
                 setColumnCount(Math.max(2, cols));
             }
@@ -229,12 +231,15 @@ function App() {
     };
 
     return (
-        <div style={{
-            height: "100%", width: "100%", overflow: "hidden",
-            boxSizing: "border-box", background: "transparent",
-            display: "flex", flexDirection: "column", position: "relative",
-            color: "white"
-        }}>
+        <div 
+            className={settings.disable_animations ? "no-animations" : ""}
+            style={{
+                height: "100%", width: "100%", overflow: "hidden",
+                boxSizing: "border-box", background: "transparent",
+                display: "flex", flexDirection: "column", position: "relative",
+                color: "white"
+            }}
+        >
             {/* HEADER & CONTROLS */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 10px 20px" }}>
                 <h1 style={{ margin: 0, color: "white", fontSize: "28px", letterSpacing: "-1px" }}>Soji</h1>
@@ -302,6 +307,16 @@ function App() {
                                 <button onClick={() => handleThemeChange("acrylic")} style={{ flex: 1, padding: "8px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", background: settings.theme === "acrylic" ? "white" : "transparent", color: settings.theme === "acrylic" ? "black" : "white", cursor: "pointer" }}>Acrylic (Blur)</button>
                                 <button onClick={() => handleThemeChange("mica")} style={{ flex: 1, padding: "8px", borderRadius: "5px", border: "1px solid rgba(255,255,255,0.2)", background: settings.theme === "mica" ? "white" : "transparent", color: settings.theme === "mica" ? "black" : "white", cursor: "pointer" }}>Mica (Tint)</button>
                             </div>
+                             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "5px" }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="disableAnimations"
+                                    checked={settings.disable_animations}
+                                    onChange={(e) => saveSettings({ ...settings, disable_animations: e.target.checked })}
+                                    style={{ transform: "scale(1.2)", cursor: "pointer" }}
+                                />
+                                <label htmlFor="disableAnimations" style={{ fontSize: "14px", cursor: "pointer" }}>Disable Animations</label>
+                            </div>
                         </div>
                         {/* Data */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -341,7 +356,6 @@ function App() {
                             <button className="tag-nav-btn" onClick={() => scrollTags('left')}>‹</button>
 
                             <div
-                                className="no-scrollbar"
                                 ref={tabsRef}
                                 style={{
                                     flex: 1, display: "flex", gap: "8px", overflowX: "auto",
@@ -428,7 +442,10 @@ function App() {
                                                         loading="eager"
                                                         decoding="async"
                                                         style={{
-                                                            width: "100%", height: "80px", objectFit: "contain",
+                                                            width: "auto", 
+                                                            maxWidth: "100%",
+                                                            height: "80px", 
+                                                            objectFit: "contain",
                                                             filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))"
                                                         }}
                                                     />
