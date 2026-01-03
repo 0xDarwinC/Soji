@@ -21,6 +21,7 @@
         "resizable": true,
         "minWidth": 260,
         "maxWidth": 800,
+        "minHeight": 475,
         "transparent": true,
         "alwaysOnTop": true,
         "visible": false,

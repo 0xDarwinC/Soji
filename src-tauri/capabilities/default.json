@@ -8,6 +8,7 @@
     "fs:default",
     "store:default",
     "global-shortcut:allow-register",
+    "core:window:allow-start-dragging",
     "dialog:default",
     {
       "identifier": "fs:scope",

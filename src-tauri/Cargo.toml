@@ -1,7 +1,7 @@
 [package]
 name = "soji"
-version = "0.1.0"
-description = "A Tauri App"
+version = "0.2.1"
+description = "Soji is a performant Rust-Tauri sticker picker for Windows 11. "
 authors = ["you"]
 edition = "2021"
 

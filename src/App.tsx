@@ -281,15 +281,22 @@ function App() {
                 color: "white"
             }}
         >
-            {/* HEADER & CONTROLS  */}
+            {/* HEADER & CONTROLS */}
             <div 
                 data-tauri-drag-region 
                 style={{ 
-                    display: "flex", alignItems: "center", justifyContent: "space-between", 
-                    padding: "20px 20px 10px 20px", cursor: "default" 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "space-between", 
+                    padding: "20px 20px 10px 20px", 
+                    cursor: "default",
+                    userSelect: "none",
+                    position: "relative",
+                    zIndex: 50
                 }}
             >
                 <h1 style={{ margin: 0, color: "white", fontSize: "28px", letterSpacing: "-1px", pointerEvents: "none" }}>Soji</h1>
+                
                 <div style={{ display: "flex", gap: "8px" }}>
                     <button className="header-btn" onClick={() => setShowSettings(!showSettings)} title="Settings">⚙</button>
                     <button className="header-btn close" onClick={handleClose} title="Close">✕</button>
