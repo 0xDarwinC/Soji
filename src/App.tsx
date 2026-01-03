@@ -39,7 +39,7 @@ function App() {
     const [stickers, setStickers] = useState<Sticker[]>([]);
     const [hoveredSticker, setHoveredSticker] = useState<number | null>(null);
     const [query, setQuery] = useState("");
-    const [activeTab, setActiveTab] = useState("All");
+    const [activeTab, setActiveTab] = useState("");
     const [showSettings, setShowSettings] = useState(false);
     const [settings, setSettings] = useState<AppSettings>({
         sticker_path: "",
@@ -60,8 +60,29 @@ function App() {
     useEffect(() => { queryRef.current = query; }, [query]);
 
     useEffect(() => {
-        refreshLibrary();
-        invoke<AppSettings>("get_settings").then(setSettings);
+        const initApp = async () => {
+            await refreshLibrary();
+            const s = await invoke<AppSettings>("get_settings");
+            setSettings(s);
+            
+            // recents is default page if you have any, else all. maybe add setting for this.
+            try {
+                const recents = await invoke<Sticker[]>("search_stickers", { 
+                    query: "", tab: "Recents", limit: 1 
+                });
+                if (recents.length > 0) {
+                    setActiveTab("Recents");
+                    loadStickers("", "Recents");
+                } else {
+                    setActiveTab("All");
+                    loadStickers("", "All");
+                }
+            } catch (e) {
+                setActiveTab("All");
+                loadStickers("", "All");
+            }
+        };
+        initApp();
 
         const handleContextMenu = (e: Event) => {
             e.preventDefault();
@@ -69,7 +90,7 @@ function App() {
         document.addEventListener('contextmenu', handleContextMenu);
 
         const unlistenShown = listen("app_shown", () => {
-            loadStickers(queryRef.current, activeTabRef.current);
+            loadStickers(queryRef.current, activeTabRef.current || "All");
             setTimeout(() => {
                 inputRef.current?.focus();
                 inputRef.current?.select();
@@ -78,7 +99,7 @@ function App() {
 
         const unlistenUpdate = listen("library_updated", () => {
             setIndexingProgress(null);
-            loadStickers(queryRef.current, activeTabRef.current);
+            loadStickers(queryRef.current, activeTabRef.current || "All");
         });
 
         const unlistenProgress = listen<IndexingProgress>("indexing_progress", (event) => {
@@ -86,6 +107,7 @@ function App() {
         });
 
         return () => {
+            document.removeEventListener('contextmenu', handleContextMenu);
             unlistenShown.then(f => f());
             unlistenUpdate.then(f => f());
             unlistenProgress.then(f => f());
@@ -114,10 +136,10 @@ function App() {
 
     const refreshLibrary = async () => {
         await invoke("refresh_library");
-        loadStickers(query, activeTab);
     };
 
     const loadStickers = async (searchQuery: string, currentTab: string) => {
+        if (!currentTab) return;
         try {
             const result = await invoke<Sticker[]>("search_stickers", {
                 query: searchQuery,
@@ -158,7 +180,6 @@ function App() {
     const saveSettings = async (newSettings: AppSettings) => {
         setSettings(newSettings);
         await invoke("save_settings", { settings: newSettings });
-        loadStickers(query, activeTab);
     };
 
     const handleChooseFolder = async () => {

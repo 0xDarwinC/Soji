@@ -6,7 +6,8 @@
     - [x] Wipe db (remove the database index, dont actually wipe the pictures.)
     - [x] Set sticker directory
     - [x] Change size of recents cache (from 18 to whatever)
-    - [ ] Disable animations
+    - [x] Disable animations
+    - [ ] close to system tray
     - [ ] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
@@ -14,11 +15,15 @@
     - [x] if square, then 160x160
     - [x] if wider than tall, then preserve aspect ratio but height 160
     - [x] else preserve ratio but width 160
+- [ ] Resize gifs properly
+    - [ ] Not feasible until I find a smart implementation. FIR resizing each frame of a gif can become computationally expensive really fast.
 - [x] while adding new images to db, theres a load screen that shows progress
 - [x] add close button
 - [ ] save the users clipboard so we dont overwrite it. Since we use ctrl c ctrl v, if the user had something on their clipboard before it will be gone. we need to restore the user's clipboard post-pasting the sticker.
 - [ ] drag drop your own stickers, auto convert to supported file type
-- [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history
+- [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history. 
+    - [ ] right click menu that can add fav or edit or delete
+    - [ ] pencil button under heart that can edit the sticker
 - [x] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
 - [ ] make window resizable
@@ -27,6 +32,7 @@
 - [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
+    - [ ] gpu acceleration?
     - [ ] clean up the repo to look organized and add documentation
 - [ ] improve ui
     - [x] fix scrollbar for tags
@@ -35,3 +41,8 @@
     - [ ] Needs feature to determine file location, or we need to do it in app via tutorial
 - [ ] graphics for repo and demonstration video
 - [ ] graphics when no results, empty sticker folder, etc
+
+Bugs:
+- the click to drag area to move the window around is like 1 pixel at the top
+- cant resize the window, or the way to do it is occluded
+- after setting desired directory, library wont refresh until you wipe

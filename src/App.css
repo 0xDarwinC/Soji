@@ -24,7 +24,7 @@ html, body {
 
 ::-webkit-scrollbar {
   width: 6px;
-  height: 6px; /* Added height for horizontal scrollbars */
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent; 
@@ -85,31 +85,39 @@ img {
   overflow: hidden; 
 }
 
-.no-animations .sticker-container:hover {
-    transform: none;
-    z-index: auto;
-}
-body:not(.no-animations) .sticker-container:hover {
+.sticker-container:hover {
   transform: scale(1.08) translateY(-5px);
   z-index: 10;
 }
 
+.no-animations .sticker-container:hover {
+  transform: none !important;
+  z-index: auto !important;
+}
+
 .sticker-name-bubble {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  margin-top: 8px;
+  
   background: rgba(40, 40, 40, 0.85);
-  padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  border: 1px solid rgba(255,255,255,0.05);
   color: rgba(255, 255, 255, 0.9);
+  
+  font-size: 11px;
+  line-height: 22px;
   text-align: center;
-  max-width: 100%;
+  padding: 0 8px;
+  
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 8px;
+  
   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
   backdrop-filter: blur(4px);
   transition: background 0.2s, color 0.2s;
-  border: 1px solid rgba(255,255,255,0.05);
 }
 
 .sticker-container:hover .sticker-name-bubble {
@@ -137,7 +145,6 @@ body:not(.no-animations) .sticker-container:hover {
 .tag-nav-btn:hover {
   background: rgba(255,255,255,0.3);
 }
-
 
 .header-btn {
   background: transparent;
