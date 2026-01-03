@@ -182,6 +182,16 @@ function App() {
         await invoke("save_settings", { settings: newSettings });
     };
 
+        const handleRestoreDefaults = async () => {
+        const defaults: AppSettings = {
+            sticker_path: settings.sticker_path, // we keep their sticker path though.
+            recents_limit: 18,
+            theme: "acrylic",
+            disable_animations: false
+        };
+        await saveSettings(defaults);
+    };
+
     const handleChooseFolder = async () => {
         try {
             const selected = await open({
@@ -384,6 +394,17 @@ function App() {
                                 <button onClick={() => handleWipeData("favorites")} style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.1)", color: "#ff4d4d", cursor: "pointer" }}>Wipe Favs</button>
                             </div>
                             <button onClick={() => handleWipeData("db")} style={{ width: "100%", padding: "10px", borderRadius: "5px", border: "1px solid #ff4d4d", background: "rgba(255, 77, 77, 0.2)", color: "#ff4d4d", cursor: "pointer", fontWeight: "bold" }}>Reset Library & Cache</button>
+                            <button 
+                                onClick={handleRestoreDefaults} 
+                                style={{ 
+                                    width: "100%", padding: "10px", borderRadius: "5px", 
+                                    border: "1px solid rgba(255, 255, 255, 0.3)", 
+                                    background: "rgba(255, 255, 255, 0.05)", 
+                                    color: "white", cursor: "pointer", fontWeight: "bold", marginTop: "5px" 
+                                }}
+                            >
+                                Restore Defaults
+                            </button>
                         </div>
                     </div>
                 </div>
