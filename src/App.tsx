@@ -191,7 +191,22 @@ function App() {
             });
 
             if (selected) {
-                saveSettings({ ...settings, sticker_path: selected as string });
+                const newPath = selected as string;
+                const updatedSettings = { ...settings, sticker_path: newPath };
+                setSettings(updatedSettings);
+                await invoke("save_settings", { settings: updatedSettings });
+
+                // Ask to wipe and re-index on dir change.
+                const confirmed = await ask(
+                    "You've changed the sticker directory. To see the new images, the library cache must be reset. Do you want to reset it now?",
+                    { title: 'Update Library?', kind: 'info' }
+                );
+
+                if (confirmed) {
+                    await invoke("wipe_data", { dataType: "db" });
+                    await invoke("refresh_library");
+                    setTimeout(() => loadStickers(query, activeTab), 100);
+                }
             }
         } catch (err) {
             console.error(err);
@@ -266,9 +281,15 @@ function App() {
                 color: "white"
             }}
         >
-            {/* HEADER & CONTROLS */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 10px 20px" }}>
-                <h1 style={{ margin: 0, color: "white", fontSize: "28px", letterSpacing: "-1px" }}>Soji</h1>
+            {/* HEADER & CONTROLS  */}
+            <div 
+                data-tauri-drag-region 
+                style={{ 
+                    display: "flex", alignItems: "center", justifyContent: "space-between", 
+                    padding: "20px 20px 10px 20px", cursor: "default" 
+                }}
+            >
+                <h1 style={{ margin: 0, color: "white", fontSize: "28px", letterSpacing: "-1px", pointerEvents: "none" }}>Soji</h1>
                 <div style={{ display: "flex", gap: "8px" }}>
                     <button className="header-btn" onClick={() => setShowSettings(!showSettings)} title="Settings">⚙</button>
                     <button className="header-btn close" onClick={handleClose} title="Close">✕</button>
