@@ -1,3 +1,4 @@
+- [x] core functionality (add stickers to db and select them on click)
 - [x] tabs
 - [x] settings
     - [x] Switch from acrylic to mica for performance
@@ -20,11 +21,12 @@
 - [x] backup and restore the user's clipboard post paste
     - Note: Should backup and restore most formats but NOT all. Does a byte read.
 - [ ] drag drop your own stickers, auto convert to supported file type
-- [ ] rename and change sticker classification dynamically (move it to a different pack). Make sure to keep the recency/history. 
+- [ ] rename and change sticker classification dynamically (move it to a different pack) Make sure to keep the recency/history. 
     - [ ] right click menu that can add fav or edit or delete
     - [ ] pencil button under heart that can edit the sticker
 - [x] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
+    - [ ] Perhaps different behavior if cursor not in a textbox.
 - [x] make window resizable
 - [ ] system tray features
     - [ ] closing window should minimize to system tray
@@ -37,15 +39,24 @@
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
     - [ ] make dialogs styled
+- [ ] help button 
+    - [ ] a one-page tutorial that shows how to set it up
+    - [ ] credits, contributors, and donate button
 - [ ] release and setup executable. user should be able to determine their settings in this step.
     - [x] Pre release and setup executable.
     - [ ] Needs feature to determine file location, or we need to do it in app via tutorial
-- [ ] graphics for repo and demonstration video and soji logo
+- [ ] graphics
+    - [ ] soji logo (undecided)
+    - [ ] no results
+    - [ ] help page infographics
+    - [ ] demonstration video/gif with that zoomy effect thing
+    - [ ] youtube video product demo
 
 Bugs:
-- [ ] Need to refactor the repo so its not just three code files.
+- [ ] Clipboard restoration will not support ALL file types. Need to exhaustively search
+for unsupported types and fix them.
 
 Potential features:
 - [ ] Resize gif
     - Not feasible until I find a smart implementation. FIR resizing each frame of a gif can become computationally expensive really fast.
-- [ ] gpu acceleration?
+- [ ] gpu acceleration for image indexing?
