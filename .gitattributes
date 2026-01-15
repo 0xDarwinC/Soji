@@ -1,0 +1,3 @@
+src/components/ linguist-detectable=false
+src/hooks/ linguist-detectable=false
+src/types/ linguist-detectable=false
