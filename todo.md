@@ -34,7 +34,8 @@
 - [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
-    - [ ] clean up the repo to look organized and add documentation
+    - [x] clean up the repo
+    - [ ] add documentation
 - [ ] improve ui
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
