@@ -10,4 +10,4 @@ The first index of your images will take a few minutes if you have thousands, bu
 Controls:
 Alt + . : Open the sticker keyboard
 Esc: Closes the sticker keyboard
-Enter: Sends the first sticker in your 
+Enter: Sends the first sticker in your clipboard

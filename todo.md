@@ -9,6 +9,7 @@
     - [x] Change size of recents cache (from 18 to whatever)
     - [ ] Change number of displayed elements in a tab (-1 to set to max possible)
     - [x] Disable animations
+    - [ ] Run on startup (default true)
     - [x] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
