@@ -83,7 +83,6 @@ struct ClipboardBackup {
     data: Vec<(u32, Vec<u8>)>,
 }
 fn backup_clipboard() -> Option<ClipboardBackup> {
-    println!("[Clipboard] Starting Backup...");
     
     let _clip = WinClipboard::new_attempts(10).ok()?;
     let available_formats: Vec<u32> = raw::EnumFormats::new().collect();
