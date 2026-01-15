@@ -12,7 +12,7 @@ use std::borrow::Cow;
 use std::thread;
 use std::time::Duration;
 use enigo::{Enigo, Key, Keyboard, Settings, Direction};
-use clipboard_win::{formats, Clipboard as WinClipboard, Setter};
+use clipboard_win::{Clipboard as WinClipboard, raw, Setter, Getter, formats};
 use std::fs;
 use chrono::Utc;
 use rusqlite::{Connection, ToSql};
@@ -75,6 +75,51 @@ struct IndexingGuard(Arc<AtomicBool>);
 impl Drop for IndexingGuard {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+// store the user's clipboard so we can return it to them after selection
+struct ClipboardBackup {
+    data: Vec<(u32, Vec<u8>)>,
+}
+fn backup_clipboard() -> Option<ClipboardBackup> {
+    println!("[Clipboard] Starting Backup...");
+    
+    let _clip = WinClipboard::new_attempts(10).ok()?;
+    let available_formats: Vec<u32> = raw::EnumFormats::new().collect();
+
+    let mut backup_data = Vec::new();
+    
+    // read data per format
+    for format_id in available_formats {
+        // skip GDI formats as they cant be saved as raw bytes
+        // check ref for formats
+        if [2, 3, 9, 14, 17].contains(&format_id) { 
+            continue; 
+        }
+
+        let mut buffer = Vec::new();
+        
+        if formats::RawData(format_id).read_clipboard(&mut buffer).is_ok() && !buffer.is_empty() {
+            backup_data.push((format_id, buffer));
+        }
+    }
+
+    if backup_data.is_empty() {
+        None
+    } else {
+        Some(ClipboardBackup { data: backup_data })
+    }
+}
+
+fn restore_clipboard(backup: ClipboardBackup) {    
+    // lock after 20*100ms = 2 seconds for leeway
+    if let Ok(_clip) = WinClipboard::new_attempts(20) {
+        let _ = raw::empty();
+        
+        for (format_id, bytes) in backup.data {
+            let _ = formats::RawData(format_id).write_clipboard(&bytes);
+        }
     }
 }
 
@@ -388,6 +433,9 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
         [&now as &dyn ToSql, &path as &dyn ToSql],
     );
 
+    // backup user clipboard
+    let clipboard_backup = backup_clipboard();
+
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
@@ -432,6 +480,11 @@ async fn select_sticker(app: AppHandle, path: String) -> Result<(), String> {
     let _ = enigo.key(Key::Control, Direction::Press);
     let _ = enigo.key(Key::Unicode('v'), Direction::Click);
     let _ = enigo.key(Key::Control, Direction::Release);
+
+    thread::sleep(Duration::from_millis(600));
+    if let Some(backup) = clipboard_backup {
+        restore_clipboard(backup);
+    }
 
     Ok(())
 }
