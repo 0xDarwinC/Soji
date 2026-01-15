@@ -11,10 +11,3 @@ Controls:
 Alt + . : Open the sticker keyboard
 Esc: Closes the sticker keyboard
 Enter: Sends the first sticker in your clipboard
-
-## HOW TO CONTRIBUTE:
-- Make a branch based on the following convention:
-    ``` 
-    (name of source branch)-(github username)-(taskInLowerCamelCase)
-    ```
-- Make a PR!
