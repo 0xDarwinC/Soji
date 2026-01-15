@@ -54,7 +54,7 @@
     - [ ] youtube video product demo
 
 Bugs:
-- [ ] Clipboard restoration will not support ALL file types. Need to exhaustively search
+- [x] Clipboard restoration will not support ALL file types. Need to exhaustively search
 for unsupported types and fix them.
 
 Potential features:
