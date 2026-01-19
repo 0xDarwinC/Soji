@@ -54,12 +54,12 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Soji ${{ github.ref_name }}'
           releaseBody: ${{ env.RELEASE_NOTES }}
-          releaseDraft: true
+          releaseDraft: false
           prerelease: ${{ contains(github.ref, '-') }}
 
       - name: Update Update-Manifest Gist
         env:
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: af72302470d57e33d9eb22409523a9a7
         shell: bash
         run: |
