@@ -169,3 +169,40 @@ img {
   background: rgba(255, 50, 50, 0.8);
   color: white;
 }
+
+/* --- Sticker Action Buttons --- */
+.sticker-action-btn {
+  position: absolute;
+  right: 0;
+  width: 30px; 
+  height: 30px; 
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 12;
+  transition: all 0.2s;
+  font-size: 16px;
+}
+
+/* Favorite Heart  */
+.sticker-fav-btn {
+  top: 0;
+}
+
+/* Edit Pencil */
+.sticker-edit-btn {
+  top: 30px;
+  color: rgba(255, 255, 255, 0.0);
+  font-size: 14px;
+}
+
+.sticker-container:hover .sticker-edit-btn {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sticker-edit-btn:hover {
+  color: white !important;
+  background: rgba(255, 255, 255, 0.1);
+}

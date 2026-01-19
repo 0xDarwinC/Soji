@@ -115,7 +115,7 @@ function App() {
                         </div>
                     )}
 
-                    <StickerGrid stickers={stickers} onReload={reloadCurrentView} />
+                    <StickerGrid stickers={stickers} packs={packs} onReload={reloadCurrentView} />
                 </div>
             )}
         </div>

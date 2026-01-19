@@ -68,7 +68,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
     };
 
     return (
-        <div className="settings-overlay" onClick={onClose}>
+        <div className="settings-overlay" onClick={onClose} onContextMenu={(e) => e.preventDefault()}>
             <div
                 className="settings-modal"
                 onClick={(e) => e.stopPropagation()}

@@ -62,6 +62,9 @@ pub fn run() {
             commands::apply_theme,
             commands::refresh_library,
             commands::get_packs,
+            commands::delete_sticker,
+            commands::rename_sticker,
+            commands::move_sticker,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
