@@ -63,6 +63,11 @@ Bugs:
 for unsupported types and fix them.
 - [x] Move pack menu and settings menu has right click context menu -- need to disable
 
+Test:
+- [ ] Move method destination outside of target subtree
+- [ ] Images smaller than 160x160
+- [ ] 
+
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
 - [ ]

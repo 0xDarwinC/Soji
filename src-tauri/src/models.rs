@@ -22,8 +22,9 @@ pub struct AppSettings {
     pub recents_limit: usize,
     pub theme: String,
     pub disable_animations: bool,
+    pub max_items: i32,
+    pub run_on_startup: bool,
 }
-
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -31,6 +32,8 @@ impl Default for AppSettings {
             recents_limit: 18,
             theme: "acrylic".to_string(),
             disable_animations: false,
+            max_items: 200,
+            run_on_startup: true,
         }
     }
 }

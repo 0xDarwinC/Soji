@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 #
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -48,9 +48,45 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Soji v__VERSION__-alpha'
+          releaseName: 'Soji ${{ github.ref_name }}'
           releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: true
           prerelease: ${{ contains(github.ref, '-') }}
+
+      - name: Update Update-Manifest Gist
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: af72302470d57e33d9eb22409523a9a7
+        shell: bash
+        run: |
+          RAW_VERSION="${GITHUB_REF_NAME#v}"
+          VERSION=$(echo "$RAW_VERSION" | cut -d'-' -f1)
+          
+          echo "Processing Version: $VERSION"
+
+          SIG=$(cat src-tauri/target/release/bundle/nsis/*.sig)
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/soji_${VERSION}_x64_en-US.nsis.zip"
+          
+          JSON_CONTENT=$(jq -n \
+            --arg ver "$VERSION" \
+            --arg date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --arg notes "New release ${{ github.ref_name }}" \
+            --arg sig "$SIG" \
+            --arg url "$DOWNLOAD_URL" \
+            '{
+              version: $ver,
+              notes: $notes,
+              pub_date: $date,
+              platforms: {
+                "windows-x86_64": {
+                  signature: $sig,
+                  url: $url
+                }
+              }
+            }')
+          
+          echo "$JSON_CONTENT" | gh gist edit $GIST_ID --add "latest.json=-"

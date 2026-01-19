@@ -1,7 +1,9 @@
-import React from 'react';
+import React, {useState} from 'react';
 import { invoke } from "@tauri-apps/api/core";
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { AppSettings } from '../../types';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import './Settings.css';
 
 interface SettingsModalProps {
@@ -12,7 +14,34 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSettings, onClose, onRefreshRequest }) => {
-    
+    const [updateStatus, setUpdateStatus] = useState("");
+    const handleCheckUpdate = async () => {
+        setUpdateStatus("Checking...");
+        try {
+            const update = await check();
+            if (update) {
+                setUpdateStatus(`Update found: ${update.version}`);
+                const yes = await ask(`Update to ${update.version} is available.\n\n${update.body}`, {
+                    title: 'Update Available',
+                    kind: 'info',
+                    okLabel: 'Update & Restart'
+                });
+                if (yes) {
+                    setUpdateStatus("Downloading...");
+                    await update.downloadAndInstall();
+                    setUpdateStatus("Restarting...");
+                    await relaunch();
+                } else {
+                    setUpdateStatus("Update skipped.");
+                }
+            } else {
+                setUpdateStatus("You are up to date.");
+            }
+        } catch (e) {
+            console.error(e);
+            setUpdateStatus("Error checking updates.");
+        }
+    };
     const handleChooseFolder = async () => {
         try {
             const selected = await open({
@@ -62,7 +91,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
             sticker_path: settings.sticker_path,
             recents_limit: 18,
             theme: "acrylic",
-            disable_animations: false
+            disable_animations: false,
+            max_items: 200,
+            run_on_startup: true
         };
         onSaveSettings(defaults);
     };
@@ -123,6 +154,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                         />
                         <label htmlFor="disableAnimations" style={{ fontSize: "14px", cursor: "pointer" }}>Disable Animations</label>
                     </div>
+                    <div className="settings-row">
+                        <input 
+                            type="checkbox" 
+                            id="runOnStartup"
+                            checked={settings.run_on_startup}
+                            onChange={(e) => onSaveSettings({ ...settings, run_on_startup: e.target.checked })}
+                            style={{ transform: "scale(1.2)", cursor: "pointer" }}
+                        />
+                        <label htmlFor="runOnStartup" style={{ fontSize: "14px", cursor: "pointer" }}>Run on Startup</label>
+                    </div>
                 </div>
 
                 {/* Data */}
@@ -139,7 +180,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                             style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }} 
                         />
                     </div>
-                    <div className="settings-row" style={{ marginTop: "5px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "5px" }}>
+                        <span style={{ fontSize: "14px", color: "white" }}>Max Items (-1 for All)</span>
+                        <input 
+                            type="number" 
+                            min="-1" max="10000" 
+                            value={settings.max_items} 
+                            onChange={(e) => onSaveSettings({ ...settings, max_items: parseInt(e.target.value) || 200 })} 
+                            style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }} 
+                        />
+                    </div>
+                    <div className="settings-row" style={{ marginTop: "10px" }}>
                         <button onClick={() => handleWipeData("history")} className="settings-btn-danger">Wipe History</button>
                         <button onClick={() => handleWipeData("favorites")} className="settings-btn-danger">Wipe Favs</button>
                     </div>
@@ -148,6 +199,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                     <button onClick={handleRestoreDefaults} className="settings-btn-default">
                         Restore Default Settings
                     </button>
+                {/* UPDATES */}
+                <div className="settings-section">
+                    <label className="settings-label">Updates</label>
+                    <button onClick={handleCheckUpdate} className="settings-btn-primary" style={{width: '100%'}}>
+                        Check for Updates
+                    </button>
+                    {updateStatus && (
+                        <div style={{ fontSize: '13px', marginTop: '5px', opacity: 0.7, textAlign: 'center' }}>
+                            {updateStatus}
+                        </div>
+                    )}
+                </div>
                 </div>
             </div>
         </div>

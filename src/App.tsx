@@ -15,7 +15,7 @@ function App() {
     const { 
         stickers, query, activeTab, packs, indexingProgress, 
         handleSearch, handleTabClick, reloadCurrentView, refreshLibrary 
-    } = useLibrary();
+    } = useLibrary(settings);
 
     const tabsRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
