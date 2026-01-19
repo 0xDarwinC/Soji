@@ -11,10 +11,10 @@
     - [x] Wipe db (remove the database index, dont actually wipe the pictures.)
     - [x] Set sticker directory
     - [x] Change size of recents cache (from 18 to whatever)
-    - [ ] Change number of displayed elements in a tab (-1 to set to max possible)
+    - [x] Change number of displayed elements in a tab (-1 to set to max possible)
     - [x] Disable animations
-    - [ ] Run on startup (default true)
-    - [ ] Check for updates/auto update
+    - [x] Run on startup (default true)
+    - [x] Check for updates/auto update
     - [x] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
@@ -66,7 +66,7 @@ for unsupported types and fix them.
 Test:
 - [ ] Move method destination outside of target subtree
 - [ ] Images smaller than 160x160
-- [ ] 
+- [ ] Check for updates works...
 
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
