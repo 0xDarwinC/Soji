@@ -13,6 +13,8 @@ use tauri::{Manager, Emitter};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+pub mod watcher;
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -26,7 +28,9 @@ pub fn run() {
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
             let handle = app.handle().clone();
-            
+            let watcher_handler = handle.clone();
+            watcher::spawn_watcher(watcher_handler);
+
             let app_dir = utils::get_app_dir(&handle);
             let db_path = app_dir.join("library.db");
             let thumb_dir = app_dir.join("thumbnails");
@@ -69,6 +73,7 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
 
 fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     if event.state == ShortcutState::Pressed {

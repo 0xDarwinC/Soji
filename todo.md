@@ -1,6 +1,9 @@
 - [x] core functionality (add stickers to db and select them on click)
 - [x] tabs
-- [ ] refresh button next to settings button (calls refresh_library)
+- [x] refresh button next to settings button (calls refresh_library)
+- [ ] help button 
+    - [ ] a one-page tutorial that shows how to set it up
+    - [ ] credits, contributors, and donate button
 - [x] settings
     - [x] Switch from acrylic to mica for performance
     - [x] Wipe recency/history cache (with an extra confirmation)
@@ -45,9 +48,6 @@
     - [ ] graphics when no results, empty sticker folder, etc
     - [ ] make dialogs styled (deletion, reindexing, renaming)
     - [ ] our own images instead of emojis for buttons
-- [ ] help button 
-    - [ ] a one-page tutorial that shows how to set it up
-    - [ ] credits, contributors, and donate button
 - [ ] release and setup executable. user should be able to determine their settings in this step.
     - [x] Pre release and setup executable.
     - [ ] Needs feature to determine file location, or we need to do it in app via tutorial
@@ -62,6 +62,10 @@ Bugs:
 - [x] Clipboard restoration will not support ALL file types. Need to exhaustively search
 for unsupported types and fix them.
 - [x] Move pack menu and settings menu has right click context menu -- need to disable
+
+Post-Release Features:
+- [ ] notification service for edit actions and refresh
+- [ ]
 
 Potential features:
 - [ ] Resize gif

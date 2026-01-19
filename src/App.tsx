@@ -14,7 +14,7 @@ function App() {
     const { settings, showSettings, setShowSettings, saveSettings, toggleSettings } = useSettings();
     const { 
         stickers, query, activeTab, packs, indexingProgress, 
-        handleSearch, handleTabClick, reloadCurrentView 
+        handleSearch, handleTabClick, reloadCurrentView, refreshLibrary 
     } = useLibrary();
 
     const tabsRef = useRef<HTMLDivElement>(null);
@@ -53,6 +53,7 @@ function App() {
     return (
         <div 
             className={settings.disable_animations ? "no-animations" : ""}
+            onContextMenu={(e) => e.preventDefault()}
             style={{
                 height: "100%", width: "100%", overflow: "hidden",
                 boxSizing: "border-box", background: "transparent",
@@ -60,7 +61,7 @@ function App() {
                 color: "white"
             }}
         >
-            <Header onToggleSettings={toggleSettings} onClose={handleClose} />
+            <Header onToggleSettings={toggleSettings} onRefresh={reloadCurrentView} onClose={handleClose} />
 
             {indexingProgress && <LoadingOverlay progress={indexingProgress} />}
 
@@ -69,7 +70,7 @@ function App() {
                     settings={settings}
                     onSaveSettings={saveSettings}
                     onClose={() => setShowSettings(false)}
-                    onRefreshRequest={reloadCurrentView}
+                    onRefreshRequest={refreshLibrary}
                 />
             )}
 
