@@ -15,6 +15,8 @@ export interface AppSettings {
     recents_limit: number;
     theme: string;
     disable_animations: boolean;
+    max_items: number;
+    run_on_startup: boolean;
 }
 
 export interface IndexingProgress {

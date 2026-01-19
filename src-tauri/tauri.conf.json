@@ -51,6 +51,13 @@
         "type": "downloadBootstrapper"
       }
     }
-  }
-  
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://gist.githubusercontent.com/0xDarwinC/af72302470d57e33d9eb22409523a9a7/raw/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBDNTM4QzNDRUIwOEY4NTEKUldSUitBanJQSXhUREdMdGhDRGd1ZUJXTXYvR2w2aGpUNDFnZVYwSG9YR0RlOU9vdzJONkRnazQK" 
+    }
+  } 
 }

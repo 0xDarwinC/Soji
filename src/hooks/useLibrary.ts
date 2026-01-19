@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Sticker, IndexingProgress } from "../types";
+import { Sticker, IndexingProgress, AppSettings } from "../types";
 
-export function useLibrary() {
+export function useLibrary(settings: AppSettings) {
     const [stickers, setStickers] = useState<Sticker[]>([]);
     const [query, setQuery] = useState("");
     const [activeTab, setActiveTab] = useState("");
@@ -45,7 +45,6 @@ export function useLibrary() {
     }, [stickers]);
 
     const initLibrary = async () => {
-        await invoke("refresh_library");
         try {
             const recents = await invoke<Sticker[]>("search_stickers", { 
                 query: "", tab: "Recents", limit: 1 
@@ -65,11 +64,13 @@ export function useLibrary() {
 
     const loadStickers = async (searchQuery: string, currentTab: string) => {
         if (!currentTab) return;
+        // if -1, infinite
+        const limit = settings.max_items === -1 ? 999999 : settings.max_items;
         try {
             const result = await invoke<Sticker[]>("search_stickers", {
                 query: searchQuery,
                 tab: currentTab,
-                limit: 1000
+                limit: limit
             });
             setStickers(result);
         } catch (err) {
