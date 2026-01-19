@@ -48,8 +48,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Soji ${{ github.ref_name }}'
@@ -64,13 +64,26 @@ jobs:
         shell: bash
         run: |
           RAW_VERSION="${GITHUB_REF_NAME#v}"
+          # Strip suffix (e.g., 0.3.1-alpha -> 0.3.1) to match Tauri's filename format
           VERSION=$(echo "$RAW_VERSION" | cut -d'-' -f1)
           
           echo "Processing Version: $VERSION"
 
-          SIG=$(cat src-tauri/target/release/bundle/nsis/*.sig)
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/soji_${VERSION}_x64_en-US.nsis.zip"
+          SIG_PATH=$(find src-tauri/target/release/bundle/nsis -name "*.exe.sig" | head -n 1)
           
+          if [ -z "$SIG_PATH" ]; then
+            echo "Error: Could not find any .exe.sig file in src-tauri/target/release/bundle/nsis"
+            echo "Listing directory for debugging:"
+            ls -R src-tauri/target/release/bundle
+            exit 1
+          fi
+
+          SIG=$(cat "$SIG_PATH")
+
+          FILENAME="soji_${VERSION}_x64-setup.exe"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${FILENAME}"
+          
+          # 3. Generate JSON
           JSON_CONTENT=$(jq -n \
             --arg ver "$VERSION" \
             --arg date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
