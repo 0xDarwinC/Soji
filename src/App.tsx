@@ -9,12 +9,15 @@ import { Header } from "./components/Header/Header";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 import { SettingsModal } from "./components/Settings/SettingsModal";
 import { StickerGrid } from "./components/StickerGrid/StickerGrid";
+import { ask } from '@tauri-apps/plugin-dialog';
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 function App() {
     const { settings, showSettings, setShowSettings, saveSettings, toggleSettings } = useSettings();
-    const { 
-        stickers, query, activeTab, packs, indexingProgress, 
-        handleSearch, handleTabClick, reloadCurrentView, refreshLibrary 
+    const {
+        stickers, query, activeTab, packs, indexingProgress,
+        handleSearch, handleTabClick, reloadCurrentView, refreshLibrary
     } = useLibrary(settings);
 
     const tabsRef = useRef<HTMLDivElement>(null);
@@ -27,6 +30,43 @@ function App() {
             inputRef.current?.select();
         }, 50);
     }, []);
+
+    useEffect(() => {
+        const checkForUpdates = async () => {
+            try {
+                const update = await check();
+
+                if (update) {
+                    console.log(`Found update: ${update.version} from ${update.date}`);
+
+                    const yes = await ask(
+                        `Update to ${update.version} is available!\n\nRelease notes: ${update.body}`,
+                        {
+                            title: 'Update Available',
+                            kind: 'info',
+                            okLabel: 'Update',
+                            cancelLabel: 'Later'
+                        }
+                    );
+                    if (yes) {
+                        await update.downloadAndInstall();
+                        await relaunch();
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to check for updates:", err);
+            }
+        };
+
+        // checks every hour
+        checkForUpdates();
+        const interval = setInterval(() => {
+            checkForUpdates();
+        }, 1000 * 60 * 60);
+
+        return () => clearInterval(interval);
+    }, []);
+
 
     const scrollTags = (direction: 'left' | 'right') => {
         if (tabsRef.current) {
@@ -51,7 +91,7 @@ function App() {
     const handleClose = () => invoke("hide_window");
 
     return (
-        <div 
+        <div
             className={settings.disable_animations ? "no-animations" : ""}
             onContextMenu={(e) => e.preventDefault()}
             style={{
@@ -66,7 +106,7 @@ function App() {
             {indexingProgress && <LoadingOverlay progress={indexingProgress} />}
 
             {showSettings && (
-                <SettingsModal 
+                <SettingsModal
                     settings={settings}
                     onSaveSettings={saveSettings}
                     onClose={() => setShowSettings(false)}
@@ -77,7 +117,7 @@ function App() {
             {!showSettings && (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "0 20px 20px 20px", overflow: "hidden" }}>
                     {/* SEARCH */}
-                    <SearchBar 
+                    <SearchBar
                         ref={inputRef}
                         query={query}
                         onSearch={handleSearch}

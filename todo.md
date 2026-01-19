@@ -62,6 +62,7 @@ Bugs:
 - [x] Clipboard restoration will not support ALL file types. Need to exhaustively search
 for unsupported types and fix them.
 - [x] Move pack menu and settings menu has right click context menu -- need to disable
+- [ ] Check for updates text result doesnt show immediately, needs to scroll to fit into window
 
 Test:
 - [ ] Move method destination outside of target subtree
