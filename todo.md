@@ -27,7 +27,7 @@
 - [x] backup and restore the user's clipboard post paste
     - Note: Should backup and restore most formats but NOT all. Does a byte read.
 - [ ] drag drop your own stickers, auto convert to supported file type
-- [ ] rename and change sticker classification dynamically (move it to a different pack) Make sure to keep the recency/history. 
+- [x] rename and change sticker classification dynamically (move it to a different pack) Make sure to keep the recency/history. 
     - [x] right click menu that can add fav or edit or delete
     - [x] pencil button under heart that can edit the sticker
     - [x] change pack while keeping its history
@@ -67,10 +67,10 @@ Test:
 - [ ] Move method destination outside of target subtree
 - [ ] Images smaller than 160x160
 - [ ] Check for updates works...
+- [ ] Display limit
 
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
-- [ ]
 
 Potential features:
 - [ ] Resize gif
