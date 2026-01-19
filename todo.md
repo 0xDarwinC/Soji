@@ -46,11 +46,14 @@
 - [ ] improve ui
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
-    - [ ] make dialogs styled (deletion, reindexing, renaming)
+    - [ ] make dialogs styled (deletion, reindexing, renaming, updates)
     - [ ] our own images instead of emojis for buttons
 - [ ] release and setup executable. user should be able to determine their settings in this step.
     - [x] Pre release and setup executable.
-    - [ ] Needs feature to determine file location, or we need to do it in app via tutorial
+    - [ ] Needs to be able to configure following settings:
+        - [ ] low power mode (disables anims and mica)
+        - [ ] target dir
+        - [ ] Run on startup (recommended) 
 - [ ] graphics
     - [ ] soji logo (undecided)
     - [ ] no results
@@ -68,6 +71,9 @@ Test:
 - [ ] Move method destination outside of target subtree
 - [ ] Images smaller than 160x160
 - [ ] Check for updates works...
+    - [x] Check for update manually
+    - [ ] Notify on startup
+    - [ ] Notify on hourly
 - [ ] Display limit
 
 Post-Release Features:
