@@ -71,6 +71,39 @@ pub fn search_stickers(conn: &Connection, query: String, tab: String, limit: usi
     Ok(stickers)
 }
 
+pub fn get_pack_path(conn: &Connection, pack_name: &str) -> Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT path FROM stickers WHERE pack = ?1 LIMIT 1")?;
+    let mut rows = stmt.query([pack_name])?;
+
+    if let Some(row) = rows.next()? {
+        let path: String = row.get(0)?;
+        Ok(Some(path))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn delete_sticker(conn: &Connection, path: &str) -> Result<()> {
+    conn.execute("DELETE FROM stickers WHERE path = ?1", [path])?;
+    Ok(())
+}
+
+pub fn rename_sticker(conn: &Connection, old_path: &str, new_path: &str, new_name: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE stickers SET path = ?1, name = ?2 WHERE path = ?3",
+        [new_path, new_name, old_path],
+    )?;
+    Ok(())
+}
+
+pub fn move_sticker(conn: &Connection, old_path: &str, new_path: &str, new_pack: &str, new_thumb_path: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE stickers SET path = ?1, pack = ?2, thumbnail_path = ?3 WHERE path = ?4",
+        [new_path, new_pack, new_thumb_path, old_path],
+    )?;
+    Ok(())
+}
+
 pub fn get_packs(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT DISTINCT pack FROM stickers ORDER BY pack")?;
     let rows = stmt.query_map([], |row| row.get(0))?;

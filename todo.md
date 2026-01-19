@@ -1,5 +1,6 @@
 - [x] core functionality (add stickers to db and select them on click)
 - [x] tabs
+- [ ] refresh button next to settings button (calls refresh_library)
 - [x] settings
     - [x] Switch from acrylic to mica for performance
     - [x] Wipe recency/history cache (with an extra confirmation)
@@ -10,6 +11,7 @@
     - [ ] Change number of displayed elements in a tab (-1 to set to max possible)
     - [x] Disable animations
     - [ ] Run on startup (default true)
+    - [ ] Check for updates/auto update
     - [x] Restore defaults
 - [x] favorites (and should dynamically update)
 - [x] recents
@@ -23,8 +25,9 @@
     - Note: Should backup and restore most formats but NOT all. Does a byte read.
 - [ ] drag drop your own stickers, auto convert to supported file type
 - [ ] rename and change sticker classification dynamically (move it to a different pack) Make sure to keep the recency/history. 
-    - [ ] right click menu that can add fav or edit or delete
-    - [ ] pencil button under heart that can edit the sticker
+    - [x] right click menu that can add fav or edit or delete
+    - [x] pencil button under heart that can edit the sticker
+    - [x] change pack while keeping its history
 - [x] hovering sticker buttons for feedback, perhaps sfx
 - [ ] make window be an offset from cursor like emoji keyboard
     - [ ] Perhaps different behavior if cursor not in a textbox.
@@ -40,7 +43,8 @@
 - [ ] improve ui
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
-    - [ ] make dialogs styled
+    - [ ] make dialogs styled (deletion, reindexing, renaming)
+    - [ ] our own images instead of emojis for buttons
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
@@ -57,6 +61,7 @@
 Bugs:
 - [x] Clipboard restoration will not support ALL file types. Need to exhaustively search
 for unsupported types and fix them.
+- [x] Move pack menu and settings menu has right click context menu -- need to disable
 
 Potential features:
 - [ ] Resize gif
