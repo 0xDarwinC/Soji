@@ -64,7 +64,6 @@ jobs:
         shell: bash
         run: |
           RAW_VERSION="${GITHUB_REF_NAME#v}"
-          # Strip suffix (e.g., 0.3.1-alpha -> 0.3.1) to match Tauri's filename format
           VERSION=$(echo "$RAW_VERSION" | cut -d'-' -f1)
           
           echo "Processing Version: $VERSION"
@@ -72,8 +71,7 @@ jobs:
           SIG_PATH=$(find src-tauri/target/release/bundle/nsis -name "*.exe.sig" | head -n 1)
           
           if [ -z "$SIG_PATH" ]; then
-            echo "Error: Could not find any .exe.sig file in src-tauri/target/release/bundle/nsis"
-            echo "Listing directory for debugging:"
+            echo "Error: Could not find any .exe.sig file"
             ls -R src-tauri/target/release/bundle
             exit 1
           fi
@@ -83,7 +81,7 @@ jobs:
           FILENAME="soji_${VERSION}_x64-setup.exe"
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${FILENAME}"
           
-          # 3. Generate JSON
+          # Generate JSON
           JSON_CONTENT=$(jq -n \
             --arg ver "$VERSION" \
             --arg date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
@@ -101,5 +99,5 @@ jobs:
                 }
               }
             }')
-          
-          echo "$JSON_CONTENT" | gh gist edit $GIST_ID --add "latest.json=-"
+          echo "$JSON_CONTENT" > latest.json
+          gh gist edit $GIST_ID --add "latest.json"
