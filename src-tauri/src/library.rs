@@ -39,6 +39,7 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
 
     // scan dir
     let walker = WalkDir::new(sticker_root).into_iter();
+    let mut found_paths = HashSet::new();
     let mut candidates = Vec::new();
 
     for entry in walker.filter_map(|e| e.ok()) {
@@ -48,6 +49,7 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
                 let ext_str = ext.to_string_lossy().to_lowercase();
                 if ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif"].contains(&ext_str.as_str()) {
                     let path_str = path.to_string_lossy().to_string();
+                    found_paths.insert(path_str.clone());
                     if !existing_paths.contains(&path_str) {
                         candidates.push(path.to_path_buf());
                     }
@@ -56,8 +58,15 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
         }
     }
 
-    if candidates.is_empty() {
-        return;
+    let to_delete: Vec<String> = existing_paths
+        .difference(&found_paths)
+        .cloned()
+        .collect();
+    let tx = conn.transaction().unwrap();
+    if !to_delete.is_empty() {
+        for path in to_delete {
+            let _ = tx.execute("DELETE FROM stickers WHERE path = ?1", [&path]);
+        }
     }
 
     // progress diagnostics
@@ -67,7 +76,6 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     let app_handle_monitor = app.clone();
     
     thread::spawn(move || {
-        let start_time = Instant::now();
         let mut last_check = Instant::now();
         let mut last_count = 0;
         let mut smoothed_rate: f64 = 0.0;
@@ -76,13 +84,11 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
             thread::sleep(Duration::from_millis(250));
             let current = processed_counter_monitor.load(Ordering::Relaxed);
             let now = Instant::now();
-            let elapsed_total = now.duration_since(start_time).as_secs_f64();
-            let elapsed_since_last = now.duration_since(last_check).as_secs_f64();
-            
-            let eta = if current > 0 && elapsed_total > 1.0 {
+            let elapsed_since_last = now.duration_since(last_check).as_secs_f64();   
+            let eta = if current > 0 {
                 let delta_items = (current - last_count) as f64;
                 let instant_rate = if elapsed_since_last > 0.0 { delta_items / elapsed_since_last } else { 0.0 };
-                
+                    
                 if smoothed_rate == 0.0 { smoothed_rate = instant_rate; } 
                 else { smoothed_rate = 0.3 * instant_rate + 0.7 * smoothed_rate; }
 
@@ -125,7 +131,6 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
         .collect();
 
     // batch insert
-    let tx = conn.transaction().unwrap();
     {
         let mut stmt = tx.prepare(
             "INSERT INTO stickers (path, name, pack, format, thumbnail_path) VALUES (?1, ?2, ?3, ?4, ?5)"
@@ -133,15 +138,15 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
 
         for item in new_stickers {
             if let Some((path, name, pack, ext, thumb)) = item {
-                stmt.execute((&path, &name, &pack, &ext, &thumb)).unwrap_or_default();
+                let _ = stmt.execute((&path, &name, &pack, &ext, &thumb));
             }
         }
     }
     tx.commit().unwrap();
     
     let _ = app.emit("indexing_progress", ProgressPayload {
-        current: total_candidates,
-        total: total_candidates,
+        current: 0,
+        total: 0,
         eta_seconds: Some(0)
     });
     
