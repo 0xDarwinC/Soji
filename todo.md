@@ -79,6 +79,7 @@ Test:
 
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
+- [ ] sort by recency score and A-Z (default)
 
 Potential features:
 - [ ] Resize gif
