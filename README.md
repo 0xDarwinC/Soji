@@ -11,3 +11,4 @@ Controls:
 Alt + . : Open the sticker keyboard
 Esc: Closes the sticker keyboard
 Enter: Sends the first sticker in your clipboard
+Right Click (on sticker): Opens up the edit context menu
