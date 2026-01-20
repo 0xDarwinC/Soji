@@ -147,8 +147,7 @@ function App() {
                 mode: 'create',
                 filePath: result.temp_path,
                 currentName: "New Sticker",
-                currentPack: activeTab !== "Recents" && activeTab !== "Favorites" && activeTab !== "All" ? activeTab : "",
-                isFavorite: false
+                currentPack: activeTab !== "Recents" && activeTab !== "Favorites" && activeTab !== "All" ? activeTab : ""
             });
         } catch (e) {
             console.error(e);

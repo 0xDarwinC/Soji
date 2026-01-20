@@ -45,23 +45,9 @@ export const StickerEditorModal: React.FC<Props> = ({ data, packs, onClose, onSu
                 });
 
             } else {
-                // --- FIXED EDIT MODE ---
-
-                const changes: any = {
-                    path: data.filePath,
-                };
-
-                if (name.trim() !== data.currentName) {
-                    changes.newName = name.trim();
-                }
-
-                if (finalPack !== data.currentPack) {
-                    changes.newPack = finalPack;
-                }
-
-                if (isFav !== data.isFavorite) {
-                    changes.isFavorite = isFav;
-                }
+                const changes: any = { path: data.filePath };
+                if (name.trim() !== data.currentName) changes.newName = name.trim();
+                if (finalPack !== data.currentPack) changes.newPack = finalPack;
 
                 await invoke('update_sticker', changes);
             }
@@ -75,9 +61,15 @@ export const StickerEditorModal: React.FC<Props> = ({ data, packs, onClose, onSu
         }
     };
 
+    const handleOverlayClick = (e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+            onClose();
+        }
+    };
+
     return (
-        <div className="editor-overlay" onClick={onClose} onContextMenu={e => e.preventDefault()}>
-            <div className="editor-modal" onClick={e => e.stopPropagation()}>
+        <div className="editor-overlay" onClick={handleOverlayClick} onContextMenu={e => e.preventDefault()}>
+            <div className="editor-modal">
                 <h3 style={{ margin: 0, color: 'white' }}>
                     {data.mode === 'create' ? 'Add New Sticker' : 'Edit Sticker'}
                 </h3>

@@ -152,7 +152,7 @@ pub fn move_sticker(app: AppHandle, path: String, pack_name: String) -> Result<(
 }
 
 #[tauri::command]
-pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, new_pack: Option<String>, is_favorite: Option<bool>) -> Result<(), String> {
+pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, new_pack: Option<String>) -> Result<(), String> {
     let conn = get_conn(&app);
     let current_path = Path::new(&path);
     
@@ -219,13 +219,6 @@ pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, ne
             // update pack column directly
             conn.execute("UPDATE stickers SET pack = ?1 WHERE path = ?2", [pack, &final_path_str]).map_err(|e| e.to_string())?;
         }
-    }
-
-    if let Some(fav) = is_favorite {
-        let target = if final_path_str != path { &final_path_str } else { &path };
-        let val = if fav { 1 } else { 0 };
-        conn.execute("UPDATE stickers SET is_favorite = ?1 WHERE path = ?2", rusqlite::params![val, target])
-            .map_err(|e| e.to_string())?;
     }
 
     Ok(())

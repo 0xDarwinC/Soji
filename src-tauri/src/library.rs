@@ -318,7 +318,7 @@ pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pa
         return Err(format!("A sticker named '{}' already exists in pack '{}'.", safe_name, pack));
     }
 
-    if let Err(e) = std::fs::rename(source_path, &target_path) {
+    if let Err(_e) = std::fs::rename(source_path, &target_path) {
         std::fs::copy(source_path, &target_path).map_err(|err| format!("Failed to copy to library: {}", err))?;
         let _ = std::fs::remove_file(source_path);
     }
