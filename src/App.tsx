@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
-
+import { listen } from "@tauri-apps/api/event";
 import { useSettings } from "./hooks/useSettings";
 import { useLibrary } from "./hooks/useLibrary";
 import { SearchBar } from "./components/SearchBar";
@@ -12,6 +12,8 @@ import { StickerGrid } from "./components/StickerGrid/StickerGrid";
 import { ask } from '@tauri-apps/plugin-dialog';
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { StickerEditorModal, EditorData } from "./components/StickerEditor/StickerEditorModal";
+import { Sticker } from "./types";
 
 function App() {
     const { settings, showSettings, setShowSettings, saveSettings, toggleSettings } = useSettings();
@@ -22,6 +24,9 @@ function App() {
 
     const tabsRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const [editorData, setEditorData] = useState<EditorData | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     // Initial focus
     useEffect(() => {
@@ -60,13 +65,105 @@ function App() {
 
         // checks every hour
         checkForUpdates();
-        const interval = setInterval(() => {
-            checkForUpdates();
-        }, 1000 * 60 * 60);
+        const interval = setInterval(checkForUpdates, 1000 * 60 * 60);
 
         return () => clearInterval(interval);
     }, []);
 
+    // drag and drop
+    useEffect(() => {
+        let dragCounter = 0;
+
+
+        const handleDragEnter = (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter++;
+            if (dragCounter === 1) setIsDragging(true);
+        };
+
+        const handleDragLeave = (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) setIsDragging(false);
+        };
+
+        const handleDragOver = (e: DragEvent) => e.preventDefault();
+        
+        const handleDrop = (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter = 0;
+            setIsDragging(false);
+
+            const uriData = e.dataTransfer?.getData("text/uri-list");
+            const textData = e.dataTransfer?.getData("text/plain");
+            const payload = uriData || textData;
+
+            if (payload && (payload.startsWith("http") || payload.startsWith("file"))) {
+                processDroppedPayload(payload);
+            }
+        };
+
+        window.addEventListener('dragenter', handleDragEnter);
+        window.addEventListener('dragleave', handleDragLeave);
+        window.addEventListener('dragover', handleDragOver);
+        window.addEventListener('drop', handleDrop);
+
+
+        const unlistenDrop = listen('tauri://drag-drop', (event: any) => {
+            setIsDragging(false);
+            dragCounter = 0;
+            
+            if (event.payload.paths && event.payload.paths.length > 0) {
+                const firstFile = event.payload.paths[0];
+                processDroppedPayload(firstFile);
+            }
+        });
+
+        const unlistenEnter = listen('tauri://drag-enter', () => {
+            setIsDragging(true);
+        });
+
+        const unlistenLeave = listen('tauri://drag-leave', () => {
+            setIsDragging(false);
+        });
+
+        return () => {
+            window.removeEventListener('dragenter', handleDragEnter);
+            window.removeEventListener('dragleave', handleDragLeave);
+            window.removeEventListener('dragover', handleDragOver);
+            window.removeEventListener('drop', handleDrop);
+            unlistenDrop.then(f => f());
+            unlistenEnter.then(f => f());
+            unlistenLeave.then(f => f());
+        };
+    }, []);
+
+    const processDroppedPayload = async (payload: string) => {
+        try {
+            console.log("Processing Drop:", payload);
+            const result: any = await invoke('cache_dropped_item', { payload });
+
+            setEditorData({
+                mode: 'create',
+                filePath: result.temp_path,
+                currentName: "New Sticker",
+                currentPack: activeTab !== "Recents" && activeTab !== "Favorites" && activeTab !== "All" ? activeTab : "",
+                isFavorite: false
+            });
+        } catch (e) {
+            console.error(e);
+            alert("Failed to process image: " + e);
+        }
+    };
+
+    const handleEditRequest = (sticker: Sticker) => {
+        setEditorData({
+            mode: 'edit',
+            filePath: sticker.path,
+            currentName: sticker.name,
+            currentPack: sticker.pack
+        });
+    };
 
     const scrollTags = (direction: 'left' | 'right') => {
         if (tabsRef.current) {
@@ -80,7 +177,6 @@ function App() {
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && stickers.length > 0) {
-            // We invoke directly here as it's a specific UI interaction
             invoke("select_sticker", { path: stickers[0].path }).catch(console.error);
         }
         if (e.key === "Escape") {
@@ -104,6 +200,28 @@ function App() {
             <Header onToggleSettings={toggleSettings} onRefresh={reloadCurrentView} onClose={handleClose} />
 
             {indexingProgress && <LoadingOverlay progress={indexingProgress} />}
+
+            {/* DRAG OVERLAY */}
+            {isDragging && (
+                <div className="drag-overlay">
+                    <div className="drag-box">
+                        Drop Image Here
+                    </div>
+                </div>
+            )}
+
+            {/* EDITOR MODAL */}
+            {editorData && (
+                <StickerEditorModal 
+                    data={editorData}
+                    packs={packs}
+                    onClose={() => setEditorData(null)}
+                    onSuccess={() => {
+                        reloadCurrentView();
+                        refreshLibrary();
+                    }}
+                />
+            )}
 
             {showSettings && (
                 <SettingsModal
@@ -156,7 +274,7 @@ function App() {
                         </div>
                     )}
 
-                    <StickerGrid stickers={stickers} packs={packs} onReload={reloadCurrentView} />
+                    <StickerGrid stickers={stickers} packs={packs} onReload={reloadCurrentView} onEdit={handleEditRequest} />
                 </div>
             )}
         </div>

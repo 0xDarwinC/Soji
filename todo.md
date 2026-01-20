@@ -67,6 +67,7 @@ for unsupported types and fix them.
 - [x] Move pack menu and settings menu has right click context menu -- need to disable
 - [ ] Check for updates text result doesnt show immediately, needs to scroll to fit into window
 - [ ] Display limit can't go to -1, also hard to enter values
+- [ ] Update dialog text is not correct
 
 Test:
 - [ ] Move method destination outside of target subtree
@@ -75,7 +76,6 @@ Test:
     - [x] Check for update manually
     - [ ] Notify on startup
     - [ ] Notify on hourly
-
 
 Post-Release Features:
 - [ ] notification service for edit actions and refresh

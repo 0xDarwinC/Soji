@@ -283,13 +283,15 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
 /// commits the temp staged file to lib
 #[tauri::command]
 pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pack: String) -> Result<String, String> {
+    println!("Commit Sticker Requested: Name='{}', Pack='{}', Source='{}'", name, pack, temp_path); // DEBUG LOG
+
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let library_dir = app_data_dir.join("Library");
     let pack_dir = library_dir.join(&pack);
     let source_path = Path::new(&temp_path);
 
     if !source_path.exists() {
-         return Err("Staging file not found. It may have been cleaned up.".to_string());
+         return Err(format!("Staging file missing at: {}", temp_path));
     }
     
     if !pack_dir.exists() {
@@ -301,30 +303,34 @@ pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pa
         .ok_or("Temp file has missing extension error")?;
 
     let safe_name: String = name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == ' ')
         .collect();
+    let safe_name = safe_name.trim();
 
     if safe_name.is_empty() {
-         return Err("Sticker name cannot be empty.".to_string());
+         return Err("Sticker name cannot be empty or special characters only.".to_string());
     }
     
     let target_filename = format!("{}.{}", safe_name, ext);
     let target_path = pack_dir.join(&target_filename);
 
     if target_path.exists() {
-        return Err(format!("A sticker named '{}' already exists in pack '{}'.", target_filename, pack));
+        return Err(format!("A sticker named '{}' already exists in pack '{}'.", safe_name, pack));
     }
 
-    if let Err(_) = std::fs::rename(source_path, &target_path) {
-         std::fs::copy(source_path, &target_path).map_err(|e| format!("Failed to copy to library: {}", e))?;
-         let _ = std::fs::remove_file(source_path);
+    if let Err(e) = std::fs::rename(source_path, &target_path) {
+        std::fs::copy(source_path, &target_path).map_err(|err| format!("Failed to copy to library: {}", err))?;
+        let _ = std::fs::remove_file(source_path);
     }
 
     let app_dir = get_app_dir(&app);
     let db_path = app_dir.join("library.db");
     let thumb_dir = app_dir.join("thumbnails");
     
-    index_library(&app, db_path, thumb_dir);
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        index_library(&app_handle, db_path, thumb_dir);
+    });
 
     Ok(target_path.to_string_lossy().into_owned())
 }

@@ -5,7 +5,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { Sticker } from '../../types';
 import { ContextMenu, ContextMenuCoords } from '../ContextMenu/ContextMenu';
-import { MoveStickerModal } from '../MoveSticker/MoveSticker';
 
 const ITEM_MIN_WIDTH = 90;
 const GAP = 10;
@@ -15,15 +14,15 @@ interface StickerGridProps {
     stickers: Sticker[];
     packs: string[];
     onReload: () => void;
+    onEdit: (sticker: Sticker) => void;
 }
 
-export const StickerGrid: React.FC<StickerGridProps> = ({ stickers, packs, onReload }) => {
+export const StickerGrid: React.FC<StickerGridProps> = ({ stickers, onReload, onEdit }) => {
     const parentRef = useRef<HTMLDivElement>(null);
     const [columnCount, setColumnCount] = useState(4);
     const [hoveredSticker, setHoveredSticker] = useState<number | null>(null);
     const [menuLocation, setMenuLocation] = useState<ContextMenuCoords | null>(null);
     const [menuTarget, setMenuTarget] = useState<Sticker | null>(null);
-    const [showMoveModal, setShowMoveModal] = useState(false);
 
     useLayoutEffect(() => {
         const updateColumns = () => {
@@ -73,20 +72,7 @@ export const StickerGrid: React.FC<StickerGridProps> = ({ stickers, packs, onRel
     const handlePencilClick = (e: React.MouseEvent, sticker: Sticker) => {
         e.stopPropagation(); 
         e.preventDefault();
-        openMenu(e.clientX, e.clientY, sticker);
-    };
-
-    const handleRename = async () => {
-        if (!menuTarget) return;
-        const newName = window.prompt("Rename Sticker:", menuTarget.name);
-        if (newName && newName !== menuTarget.name) {
-            try {
-                await invoke("rename_sticker", { path: menuTarget.path, newName });
-                onReload();
-            } catch (e) {
-                alert(`Error renaming: ${e}`);
-            }
-        }
+        onEdit(sticker);
     };
 
     const handleDelete = async () => {
@@ -104,17 +90,6 @@ export const StickerGrid: React.FC<StickerGridProps> = ({ stickers, packs, onRel
                 console.error(e);
                 alert("Failed to delete.");
             }
-        }
-    };
-
-    const handleMoveSticker = async (packName: string) => {
-        if (!menuTarget) return;
-        try {
-            await invoke("move_sticker", { path: menuTarget.path, packName });
-            setShowMoveModal(false);
-            onReload();
-        } catch (e) {
-            alert(`Failed to move sticker: ${e}`);
         }
     };
 
@@ -161,40 +136,14 @@ export const StickerGrid: React.FC<StickerGridProps> = ({ stickers, packs, onRel
                                             <div
                                                 className="sticker-action-btn sticker-fav-btn"
                                                 onClick={(e) => { e.stopPropagation(); handleToggleFav(s.path); }}
-                                                onMouseEnter={(e) => e.currentTarget.style.color = "#ff4d4d"}
-                                                onMouseLeave={(e) => e.currentTarget.style.color = s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.3)"}
-                                                style={{
-                                                    color: s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.3)",
-                                                }}
-                                            >
-                                                ♥
+                                                style={{ color: s.is_favorite ? "#ff4d4d" : "rgba(255,255,255,0.3)" }}>♥
                                             </div>
-
-                                            <div
-                                                className="sticker-action-btn sticker-edit-btn"
-                                                onClick={(e) => handlePencilClick(e, s)}
-                                                title="Edit"
-                                            >
-                                                ✎
+                                            <div className="sticker-action-btn sticker-edit-btn"
+                                                onClick={(e) => handlePencilClick(e, s)} title="Edit">✎
                                             </div>
-
-                                            <img
-                                                src={convertFileSrc(imgSrc)}
-                                                alt={s.name}
-                                                loading="eager"
-                                                decoding="async"
-                                                style={{
-                                                    width: "auto", 
-                                                    maxWidth: "100%",
-                                                    height: "80px", 
-                                                    objectFit: "contain",
-                                                    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))"
-                                                }}
-                                            />
-
-                                            <div className="sticker-name-bubble">
-                                                {s.name}
-                                            </div>
+                                            <img src={convertFileSrc(imgSrc)} alt={s.name} loading="eager" decoding="async"
+                                                style={{ width: "auto", maxWidth: "100%", height: "80px", objectFit: "contain", filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))" }} />
+                                            <div className="sticker-name-bubble">{s.name}</div>
                                         </div>
                                     );
                                 })}
@@ -214,32 +163,18 @@ export const StickerGrid: React.FC<StickerGridProps> = ({ stickers, packs, onRel
                             onClick: () => handleToggleFav(menuTarget.path),
                             icon: "♥"
                         },
-                        {
-                            label: "Move to Different Pack", 
-                            onClick: () => setShowMoveModal(true),
-                            icon: "➡️"
-                        }, 
                         { 
-                            label: "Rename", 
-                            onClick: handleRename,
-                            icon: "✎"
+                            label: "Edit / Move", 
+                            onClick: () => onEdit(menuTarget), 
+                            icon: "✎" 
                         },
                         { 
-                            label: "Remove from Library", 
-                            onClick: handleDelete,
-                            danger: true,
-                            icon: "🗑"
+                            label: "Remove", 
+                            onClick: handleDelete, 
+                            danger: true, 
+                            icon: "🗑" 
                         }
                     ]}
-                />
-            )}
-            {showMoveModal && menuTarget && (
-                <MoveStickerModal 
-                    stickerName={menuTarget.name}
-                    currentPack={menuTarget.pack}
-                    packs={packs}
-                    onClose={() => setShowMoveModal(false)}
-                    onMove={handleMoveSticker}
                 />
             )}
         </>
