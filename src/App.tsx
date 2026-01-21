@@ -140,8 +140,12 @@ function App() {
 
     const processDroppedPayload = async (payload: string) => {
         try {
-            console.log("Processing Drop:", payload);
-            const result: any = await invoke('cache_dropped_item', { payload });
+            const cleanPayload = payload.split(/[\r\n]+/).map(x => x.trim()).find(x => x.length > 0);
+            
+            if (!cleanPayload) return;
+
+            console.log("Processing Drop:", cleanPayload);
+            const result: any = await invoke('cache_dropped_item', { payload: cleanPayload });
 
             setEditorData({
                 mode: 'create',

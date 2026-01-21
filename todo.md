@@ -68,6 +68,7 @@ for unsupported types and fix them.
 - [ ] Check for updates text result doesnt show immediately, needs to scroll to fit into window
 - [ ] Display limit can't go to -1, also hard to enter values
 - [ ] Update dialog text is not correct
+- title bar
 
 Test:
 - [ ] Move method destination outside of target subtree

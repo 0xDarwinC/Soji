@@ -21,6 +21,7 @@ use uuid::Uuid;
 use reqwest::blocking::Client;
 use url::Url;
 use infer;
+use crate::database;
 
 pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     let state = app.state::<AppState>();
@@ -279,23 +280,42 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
     }))
 }
 
-
 /// commits the temp staged file to lib
 #[tauri::command]
 pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pack: String) -> Result<String, String> {
-    println!("Commit Sticker Requested: Name='{}', Pack='{}', Source='{}'", name, pack, temp_path); // DEBUG LOG
+    println!("Commit Sticker Requested: Name='{}', Pack='{}', Source='{}'", name, pack, temp_path);
 
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let library_dir = app_data_dir.join("Library");
-    let pack_dir = library_dir.join(&pack);
+    let root_dir = resolve_sticker_path(&app);
     let source_path = Path::new(&temp_path);
 
     if !source_path.exists() {
          return Err(format!("Staging file missing at: {}", temp_path));
     }
+
+    let app_dir = get_app_dir(&app);
+    let db_path = app_dir.join("library.db");
     
+    let pack_dir = if let Ok(conn) = Connection::open(&db_path) {
+        match database::get_pack_path(&conn, &pack) {
+            Ok(Some(existing_path_str)) => {
+                PathBuf::from(existing_path_str).parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| root_dir.join(&pack))
+            },
+            _ => root_dir.join(&pack)
+        }
+    } else {
+        root_dir.join(&pack)
+    };
+
+    let clean_root = fs::canonicalize(&root_dir).unwrap_or(root_dir.clone());
     if !pack_dir.exists() {
         std::fs::create_dir_all(&pack_dir).map_err(|e| format!("Failed to create pack directory: {}", e))?;
+    }
+    let clean_target_pack = fs::canonicalize(&pack_dir).map_err(|e| format!("Path resolution error: {}", e))?;
+
+    if !clean_target_pack.starts_with(&clean_root) {
+        return Err("Security Violation: Cannot save sticker outside of library directory.".to_string());
     }
 
     let ext = source_path.extension()
@@ -323,12 +343,10 @@ pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pa
         let _ = std::fs::remove_file(source_path);
     }
 
-    let app_dir = get_app_dir(&app);
-    let db_path = app_dir.join("library.db");
     let thumb_dir = app_dir.join("thumbnails");
-    
     let app_handle = app.clone();
     std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
         index_library(&app_handle, db_path, thumb_dir);
     });
 

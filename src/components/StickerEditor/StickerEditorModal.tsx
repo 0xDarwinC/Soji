@@ -69,7 +69,7 @@ export const StickerEditorModal: React.FC<Props> = ({ data, packs, onClose, onSu
 
     return (
         <div className="editor-overlay" onClick={handleOverlayClick} onContextMenu={e => e.preventDefault()}>
-            <div className="editor-modal">
+            <div className="editor-modal" onClick={(e) => e.stopPropagation()}>
                 <h3 style={{ margin: 0, color: 'white' }}>
                     {data.mode === 'create' ? 'Add New Sticker' : 'Edit Sticker'}
                 </h3>
