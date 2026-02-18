@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { listen } from "@tauri-apps/api/event";
@@ -71,6 +71,42 @@ function App() {
     }, []);
 
     // drag and drop
+    const processDroppedPayload = useCallback(async (payload: string, htmlData?: string) => {
+        try {
+            let cleanPayload = payload.split(/[\r\n]+/).map(x => x.trim()).find(x => x.length > 0);
+            
+            if ((!cleanPayload || !cleanPayload.startsWith("http")) && htmlData) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlData, "text/html");
+                const img = doc.querySelector("img");
+                if (img && img.src) {
+                    cleanPayload = img.src;
+                }
+            }
+
+            if (!cleanPayload) return;
+
+            console.log("Processing Drop:", cleanPayload);
+            const isUrl = cleanPayload.startsWith("http");
+            const isFile = cleanPayload.match(/^[a-zA-Z]:\\/) || cleanPayload.startsWith("file://") || cleanPayload.startsWith("/");
+            if (!isUrl && !isFile) {
+                return;
+            }
+            
+            const result: any = await invoke('cache_dropped_item', { payload: cleanPayload });
+
+            setEditorData({
+                mode: 'create',
+                filePath: result.temp_path,
+                currentName: "New Sticker",
+                currentPack: ["Recents", "Favorites", "All"].includes(activeTab) ? "" : activeTab
+            });
+        } catch (e) {
+            console.error(e);
+            alert("Failed to process image: " + e);
+        }
+    }, [activeTab]);
+
     useEffect(() => {
         let dragCounter = 0;
 
@@ -96,10 +132,27 @@ function App() {
 
             const uriData = e.dataTransfer?.getData("text/uri-list");
             const textData = e.dataTransfer?.getData("text/plain");
+            const htmlData = e.dataTransfer?.getData("text/html");
             const payload = uriData || textData;
 
-            if (payload && (payload.startsWith("http") || payload.startsWith("file"))) {
-                processDroppedPayload(payload);
+            if (payload || htmlData) {
+                processDroppedPayload(payload || "", htmlData);
+            }
+        };
+
+        
+
+        const handlePaste = (e: ClipboardEvent) => {
+            const target = e.target as HTMLElement;
+            const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            
+            if (isInput) return;
+
+            const textData = e.clipboardData?.getData("text/plain");
+            const htmlData = e.clipboardData?.getData("text/html");
+
+            if (textData || htmlData) {
+                processDroppedPayload(textData || "", htmlData);
             }
         };
 
@@ -107,6 +160,7 @@ function App() {
         window.addEventListener('dragleave', handleDragLeave);
         window.addEventListener('dragover', handleDragOver);
         window.addEventListener('drop', handleDrop);
+        window.addEventListener('paste', handlePaste);
 
 
         const unlistenDrop = listen('tauri://drag-drop', (event: any) => {
@@ -132,32 +186,12 @@ function App() {
             window.removeEventListener('dragleave', handleDragLeave);
             window.removeEventListener('dragover', handleDragOver);
             window.removeEventListener('drop', handleDrop);
+            window.removeEventListener('paste', handlePaste);
             unlistenDrop.then(f => f());
             unlistenEnter.then(f => f());
             unlistenLeave.then(f => f());
         };
-    }, []);
-
-    const processDroppedPayload = async (payload: string) => {
-        try {
-            const cleanPayload = payload.split(/[\r\n]+/).map(x => x.trim()).find(x => x.length > 0);
-            
-            if (!cleanPayload) return;
-
-            console.log("Processing Drop:", cleanPayload);
-            const result: any = await invoke('cache_dropped_item', { payload: cleanPayload });
-
-            setEditorData({
-                mode: 'create',
-                filePath: result.temp_path,
-                currentName: "New Sticker",
-                currentPack: activeTab !== "Recents" && activeTab !== "Favorites" && activeTab !== "All" ? activeTab : ""
-            });
-        } catch (e) {
-            console.error(e);
-            alert("Failed to process image: " + e);
-        }
-    };
+    }, [processDroppedPayload]);
 
     const handleEditRequest = (sticker: Sticker) => {
         setEditorData({

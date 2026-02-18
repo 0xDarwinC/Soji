@@ -71,12 +71,17 @@ for unsupported types and fix them.
 - title bar
 
 Test:
-- [ ] Move method destination outside of target subtree
+- [ ] Move method destination outside of user dir subtree
 - [ ] Images smaller than 160x160
 - [ ] Check for updates works...
     - [x] Check for update manually
     - [ ] Notify on startup
     - [ ] Notify on hourly
+- [ ]  drag and drop
+    - [ ] large files >25mb
+    - [ ] new sticker pack
+    - [ ] file types (unsupported vs supp)
+
 
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
@@ -85,7 +90,7 @@ Post-Release Features:
     - [ ] see pjsk sticker editor for details
     - [ ] move text x and y axis, rotate full 360
     - [ ] additional font options?
-    
+
 
 Potential features:
 - [ ] Resize gif

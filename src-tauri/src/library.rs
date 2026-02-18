@@ -23,6 +23,9 @@ use url::Url;
 use infer;
 use crate::database;
 
+//user specified in the future? 25mb for now...
+const MAX_STICKER_SIZE: u64 = 25*1024*1024;
+
 pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     let state = app.state::<AppState>();
     if state.is_indexing.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
@@ -234,10 +237,22 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
             .map_err(|e| format!("Network error: {}", e))?;
 
         if !response.status().is_success() {
-             return Err(format!("Failed to download image. Status: {}", response.status()));
+            return Err(format!("Failed to download image. Status: {}", response.status()));
+        }
+
+        if let Some(len) = response.content_length() {
+            if len > MAX_STICKER_SIZE {
+                return Err(format!("File too large! =^[ Limit is {}MB...", MAX_STICKER_SIZE / 1024 / 1024));
+            }
         }
 
         let bytes = response.bytes().map_err(|e| format!("Failed to read bytes: {}", e))?;
+        
+        if bytes.len() as u64 > MAX_STICKER_SIZE {
+            let _ = std::fs::remove_file(&initial_temp_path);
+            return Err(format!("File exceeded size limit of {}MB", MAX_STICKER_SIZE / 1024 / 1024));
+        }
+        
         std::fs::write(&initial_temp_path, &bytes).map_err(|e| format!("Failed to write temp file: {}", e))?;
     } else {
         let clean_path = if payload.starts_with("file:///") {
@@ -252,8 +267,15 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
         let path = Path::new(&decoded_path);
 
         if !path.exists() || !path.is_file() {
-             return Err(format!("File does not exist locally or is not a file: {}", decoded_path));
+            return Err(format!("File does not exist locally or is not a file: {}", decoded_path));
         }
+
+        // final size check for safety
+        let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+        if metadata.len() > MAX_STICKER_SIZE {
+            return Err(format!("Local file too large. Limit is {}MB", MAX_STICKER_SIZE / 1024 / 1024));
+        }
+
         std::fs::copy(path, &initial_temp_path).map_err(|e| format!("Failed to copy local file: {}", e))?;
     }
 
@@ -283,72 +305,70 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
 /// commits the temp staged file to lib
 #[tauri::command]
 pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pack: String) -> Result<String, String> {
-    println!("Commit Sticker Requested: Name='{}', Pack='{}', Source='{}'", name, pack, temp_path);
+println!("Commit Sticker Requested: Name='{}', Pack='{}'", name, pack);
 
+    // paths
     let root_dir = resolve_sticker_path(&app);
-    let source_path = Path::new(&temp_path);
-
-    if !source_path.exists() {
-         return Err(format!("Staging file missing at: {}", temp_path));
-    }
-
     let app_dir = get_app_dir(&app);
     let db_path = app_dir.join("library.db");
     
+    // resolve dir
     let pack_dir = if let Ok(conn) = Connection::open(&db_path) {
         match database::get_pack_path(&conn, &pack) {
-            Ok(Some(existing_path_str)) => {
-                PathBuf::from(existing_path_str).parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| root_dir.join(&pack))
+            Ok(Some(existing_file_path)) => {
+                let p = PathBuf::from(existing_file_path);
+                p.parent()
+                 .map(|parent| parent.to_path_buf())
+                 .unwrap_or_else(|| root_dir.join(&pack))
             },
-            _ => root_dir.join(&pack)
+            _ => root_dir.join(&pack) // create if dne
         }
     } else {
         root_dir.join(&pack)
     };
 
-    let clean_root = fs::canonicalize(&root_dir).unwrap_or(root_dir.clone());
     if !pack_dir.exists() {
-        std::fs::create_dir_all(&pack_dir).map_err(|e| format!("Failed to create pack directory: {}", e))?;
+        std::fs::create_dir_all(&pack_dir).map_err(|e| format!("Create dir failed: {}", e))?;
     }
-    let clean_target_pack = fs::canonicalize(&pack_dir).map_err(|e| format!("Path resolution error: {}", e))?;
 
-    if !clean_target_pack.starts_with(&clean_root) {
-        return Err("Security Violation: Cannot save sticker outside of library directory.".to_string());
+    let canonical_root = fs::canonicalize(&root_dir).map_err(|e| format!("Root invalid: {}", e))?;
+    let canonical_pack = fs::canonicalize(&pack_dir).map_err(|e| format!("Pack invalid: {}", e))?;
+
+    if !canonical_pack.starts_with(&canonical_root) {
+        return Err("Security Violation: Cannot save sticker outside of library root.".to_string());
     }
+
+    let source_path = Path::new(&temp_path);
+    if !source_path.exists() { return Err("Source temp file missing".to_string()); }
 
     let ext = source_path.extension()
         .and_then(|e| e.to_str())
-        .ok_or("Temp file has missing extension error")?;
+        .ok_or("Temp file missing extension")?;
 
     let safe_name: String = name.chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == ' ')
         .collect();
     let safe_name = safe_name.trim();
+    if safe_name.is_empty() { return Err("Invalid sticker name".to_string()); }
 
-    if safe_name.is_empty() {
-         return Err("Sticker name cannot be empty or special characters only.".to_string());
-    }
-    
     let target_filename = format!("{}.{}", safe_name, ext);
     let target_path = pack_dir.join(&target_filename);
 
     if target_path.exists() {
-        return Err(format!("A sticker named '{}' already exists in pack '{}'.", safe_name, pack));
+        return Err(format!("File '{}' already exists in pack '{}'", target_filename, pack));
     }
 
-    if let Err(_e) = std::fs::rename(source_path, &target_path) {
-        std::fs::copy(source_path, &target_path).map_err(|err| format!("Failed to copy to library: {}", err))?;
+    if let Err(_) = std::fs::rename(source_path, &target_path) {
+        std::fs::copy(source_path, &target_path).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(source_path);
     }
 
     let thumb_dir = app_dir.join("thumbnails");
     let app_handle = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(150));
         index_library(&app_handle, db_path, thumb_dir);
     });
 
-    Ok(target_path.to_string_lossy().into_owned())
+    Ok(target_path.to_string_lossy().to_string())
 }
