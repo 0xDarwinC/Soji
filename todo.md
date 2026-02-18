@@ -67,18 +67,30 @@ for unsupported types and fix them.
 - [x] Move pack menu and settings menu has right click context menu -- need to disable
 - [ ] Check for updates text result doesnt show immediately, needs to scroll to fit into window
 - [ ] Display limit can't go to -1, also hard to enter values
+- [ ] Update dialog text is not correct
+- title bar
 
 Test:
-- [ ] Move method destination outside of target subtree
+- [ ] Move method destination outside of user dir subtree
 - [ ] Images smaller than 160x160
 - [ ] Check for updates works...
     - [x] Check for update manually
     - [ ] Notify on startup
     - [ ] Notify on hourly
+- [ ]  drag and drop
+    - [ ] large files >25mb
+    - [ ] new sticker pack
+    - [ ] file types (unsupported vs supp)
 
 
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
+- [ ] sort by recency score and A-Z (default)
+- [ ] sticker editor
+    - [ ] see pjsk sticker editor for details
+    - [ ] move text x and y axis, rotate full 360
+    - [ ] additional font options?
+
 
 Potential features:
 - [ ] Resize gif

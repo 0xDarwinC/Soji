@@ -1,5 +1,5 @@
 use crate::models::{IndexingGuard, ProgressPayload, AppState};
-use crate::utils::resolve_sticker_path;
+use crate::utils::{get_app_dir, resolve_sticker_path};
 use tauri::{AppHandle, Manager, Emitter};
 use walkdir::WalkDir;
 use std::collections::HashSet;
@@ -17,6 +17,14 @@ use fr::images::Image;
 use sha2::{Sha256, Digest};
 use rayon::prelude::*;
 use tokio::time::Instant;
+use uuid::Uuid;
+use reqwest::blocking::Client;
+use url::Url;
+use infer;
+use crate::database;
+
+//user specified in the future? 25mb for now...
+const MAX_STICKER_SIZE: u64 = 25*1024*1024;
 
 pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     let state = app.state::<AppState>();
@@ -200,4 +208,167 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
         }
     }
     src_path.to_path_buf()
+}
+
+// caches drag and drop object
+#[tauri::command]
+pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serde_json::Value, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let temp_dir = app_data_dir.join("temp_staging");
+    
+    if !temp_dir.exists() {
+        std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    }
+
+    let temp_id = Uuid::new_v4().to_string();
+    let initial_temp_path = temp_dir.join(&temp_id);
+    let is_url = Url::parse(&payload).is_ok() && (payload.starts_with("http://") || payload.starts_with("https://"));
+
+    if is_url {
+        println!("Attempting to download URL: {}", payload);
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let response = client.get(&payload)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .send()
+            .map_err(|e| format!("Network error: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Failed to download image. Status: {}", response.status()));
+        }
+
+        if let Some(len) = response.content_length() {
+            if len > MAX_STICKER_SIZE {
+                return Err(format!("File too large! =^[ Limit is {}MB...", MAX_STICKER_SIZE / 1024 / 1024));
+            }
+        }
+
+        let bytes = response.bytes().map_err(|e| format!("Failed to read bytes: {}", e))?;
+        
+        if bytes.len() as u64 > MAX_STICKER_SIZE {
+            let _ = std::fs::remove_file(&initial_temp_path);
+            return Err(format!("File exceeded size limit of {}MB", MAX_STICKER_SIZE / 1024 / 1024));
+        }
+        
+        std::fs::write(&initial_temp_path, &bytes).map_err(|e| format!("Failed to write temp file: {}", e))?;
+    } else {
+        let clean_path = if payload.starts_with("file:///") {
+            payload.replace("file:///", "")
+        } else if payload.starts_with("file://") {
+             payload.replace("file://", "")
+        } else {
+            payload.clone()
+        };
+        
+        let decoded_path = urlencoding::decode(&clean_path).map_err(|e| e.to_string())?.into_owned();
+        let path = Path::new(&decoded_path);
+
+        if !path.exists() || !path.is_file() {
+            return Err(format!("File does not exist locally or is not a file: {}", decoded_path));
+        }
+
+        // final size check for safety
+        let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+        if metadata.len() > MAX_STICKER_SIZE {
+            return Err(format!("Local file too large. Limit is {}MB", MAX_STICKER_SIZE / 1024 / 1024));
+        }
+
+        std::fs::copy(path, &initial_temp_path).map_err(|e| format!("Failed to copy local file: {}", e))?;
+    }
+
+    let kind = infer::get_from_path(&initial_temp_path)
+        .map_err(|e| format!("Failed to inspect file: {}", e))?
+        .ok_or("Unknown file type. Could not detect image format.")?;
+
+    let mime = kind.mime_type();
+    let detected_ext = kind.extension();
+
+    println!("Detected mime: {}, ext: {}", mime, detected_ext);
+    if !mime.starts_with("image/") || mime == "image/svg+xml" {
+         let _ = std::fs::remove_file(&initial_temp_path);
+         return Err(format!("Invalid file type: {}. Only raster images (PNG, JPG, GIF, WEBP) are supported.", mime));
+    }
+
+    let final_temp_path = temp_dir.join(format!("{}.{}", temp_id, detected_ext));
+    std::fs::rename(&initial_temp_path, &final_temp_path).map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+    Ok(serde_json::json!({
+        "temp_path": final_temp_path.to_string_lossy().into_owned(),
+        "detected_extension": detected_ext,
+        "source_type": if is_url { "url" } else { "local" }
+    }))
+}
+
+/// commits the temp staged file to lib
+#[tauri::command]
+pub fn commit_sticker(app: tauri::AppHandle, temp_path: String, name: String, pack: String) -> Result<String, String> {
+println!("Commit Sticker Requested: Name='{}', Pack='{}'", name, pack);
+
+    // paths
+    let root_dir = resolve_sticker_path(&app);
+    let app_dir = get_app_dir(&app);
+    let db_path = app_dir.join("library.db");
+    
+    // resolve dir
+    let pack_dir = if let Ok(conn) = Connection::open(&db_path) {
+        match database::get_pack_path(&conn, &pack) {
+            Ok(Some(existing_file_path)) => {
+                let p = PathBuf::from(existing_file_path);
+                p.parent()
+                 .map(|parent| parent.to_path_buf())
+                 .unwrap_or_else(|| root_dir.join(&pack))
+            },
+            _ => root_dir.join(&pack) // create if dne
+        }
+    } else {
+        root_dir.join(&pack)
+    };
+
+    if !pack_dir.exists() {
+        std::fs::create_dir_all(&pack_dir).map_err(|e| format!("Create dir failed: {}", e))?;
+    }
+
+    let canonical_root = fs::canonicalize(&root_dir).map_err(|e| format!("Root invalid: {}", e))?;
+    let canonical_pack = fs::canonicalize(&pack_dir).map_err(|e| format!("Pack invalid: {}", e))?;
+
+    if !canonical_pack.starts_with(&canonical_root) {
+        return Err("Security Violation: Cannot save sticker outside of library root.".to_string());
+    }
+
+    let source_path = Path::new(&temp_path);
+    if !source_path.exists() { return Err("Source temp file missing".to_string()); }
+
+    let ext = source_path.extension()
+        .and_then(|e| e.to_str())
+        .ok_or("Temp file missing extension")?;
+
+    let safe_name: String = name.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == ' ')
+        .collect();
+    let safe_name = safe_name.trim();
+    if safe_name.is_empty() { return Err("Invalid sticker name".to_string()); }
+
+    let target_filename = format!("{}.{}", safe_name, ext);
+    let target_path = pack_dir.join(&target_filename);
+
+    if target_path.exists() {
+        return Err(format!("File '{}' already exists in pack '{}'", target_filename, pack));
+    }
+
+    if let Err(_) = std::fs::rename(source_path, &target_path) {
+        std::fs::copy(source_path, &target_path).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(source_path);
+    }
+
+    let thumb_dir = app_dir.join("thumbnails");
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        thread::sleep(Duration::from_millis(150));
+        index_library(&app_handle, db_path, thumb_dir);
+    });
+
+    Ok(target_path.to_string_lossy().to_string())
 }

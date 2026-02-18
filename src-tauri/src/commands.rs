@@ -152,6 +152,79 @@ pub fn move_sticker(app: AppHandle, path: String, pack_name: String) -> Result<(
 }
 
 #[tauri::command]
+pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, new_pack: Option<String>) -> Result<(), String> {
+    let conn = get_conn(&app);
+    let current_path = Path::new(&path);
+    
+    if !current_path.exists() {
+        return Err("Sticker file not found on disk.".to_string());
+    }
+
+    let root_dir = utils::resolve_sticker_path(&app);
+    let mut final_path_buf = current_path.to_path_buf();
+    
+    if let Some(pack) = &new_pack {
+        let target_pack_dir = root_dir.join(pack);
+        if !target_pack_dir.exists() {
+            fs::create_dir_all(&target_pack_dir).map_err(|e| e.to_string())?;
+        }
+        final_path_buf = target_pack_dir.join(final_path_buf.file_name().unwrap());
+    }
+
+    if let Some(name) = &new_name {
+        let ext = final_path_buf.extension().unwrap_or_default().to_string_lossy();
+        let safe_name: String = name.chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .collect();
+        final_path_buf.set_file_name(format!("{}.{}", safe_name, ext));
+    }
+
+    let final_path_str = final_path_buf.to_string_lossy().to_string();
+
+    if final_path_str != path {
+        if final_path_buf.exists() {
+            return Err("A sticker with this name/pack already exists.".to_string());
+        }
+
+        fs::rename(&path, &final_path_buf).map_err(|e| format!("FS Error: {}", e))?;
+
+        let mut query = "UPDATE stickers SET path = ?1".to_string();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(final_path_str.clone())];
+        
+        let mut param_idx = 2;
+        
+        if let Some(name) = &new_name {
+            query.push_str(&format!(", name = ?{}", param_idx));
+            params.push(Box::new(name.clone()));
+            param_idx += 1;
+        }
+        
+        if let Some(pack) = &new_pack {
+            query.push_str(&format!(", pack = ?{}", param_idx));
+            params.push(Box::new(pack.clone()));
+            param_idx += 1;
+        }
+
+        query.push_str(&format!(" WHERE path = ?{}", param_idx));
+        params.push(Box::new(path.clone()));
+        
+        if let Some(name) = &new_name {
+            database::rename_sticker(&conn, &path, &final_path_str, name).map_err(|e| e.to_string())?;
+        } else {
+            let old_name: String = conn.query_row("SELECT name FROM stickers WHERE path = ?1", [&path], |r| r.get(0)).unwrap_or_default();
+            database::rename_sticker(&conn, &path, &final_path_str, &old_name).map_err(|e| e.to_string())?;
+        }
+
+        if let Some(pack) = &new_pack {
+            // update pack column directly
+            conn.execute("UPDATE stickers SET pack = ?1 WHERE path = ?2", [pack, &final_path_str]).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_packs(app: AppHandle) -> Result<Vec<String>, String> {
     let conn = get_conn(&app);
     database::get_packs(&conn).map_err(|e| e.to_string())

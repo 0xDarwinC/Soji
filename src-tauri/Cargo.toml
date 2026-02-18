@@ -1,6 +1,6 @@
 [package]
 name = "soji"
-version = "0.3.8"
+version = "0.4.0"
 description = "Soji is a performant Rust-Tauri sticker picker for Windows 11. "
 authors = ["you"]
 edition = "2021"
@@ -44,5 +44,10 @@ notify = "6.1.1"
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-updater = "2.9.0"
 tauri-plugin-process = "2.3.1"
+reqwest = { version = "0.13.1", features = ["blocking", "rustls-native-certs"] }
+infer = "0.19.0"
+uuid = { version = "1.19.0", features = ["v4", "fast-rng"] }
+url = "2.5.8"
+urlencoding = "2.1.3"
 
 

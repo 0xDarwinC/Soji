@@ -71,6 +71,9 @@ pub fn run() {
             commands::delete_sticker,
             commands::rename_sticker,
             commands::move_sticker,
+            commands::update_sticker,
+            library::cache_dropped_item,
+            library::commit_sticker
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
-
+import { listen } from "@tauri-apps/api/event";
 import { useSettings } from "./hooks/useSettings";
 import { useLibrary } from "./hooks/useLibrary";
 import { SearchBar } from "./components/SearchBar";
@@ -12,6 +12,8 @@ import { StickerGrid } from "./components/StickerGrid/StickerGrid";
 import { ask } from '@tauri-apps/plugin-dialog';
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { StickerEditorModal, EditorData } from "./components/StickerEditor/StickerEditorModal";
+import { Sticker } from "./types";
 
 function App() {
     const { settings, showSettings, setShowSettings, saveSettings, toggleSettings } = useSettings();
@@ -22,6 +24,9 @@ function App() {
 
     const tabsRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const [editorData, setEditorData] = useState<EditorData | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     // Initial focus
     useEffect(() => {
@@ -60,13 +65,142 @@ function App() {
 
         // checks every hour
         checkForUpdates();
-        const interval = setInterval(() => {
-            checkForUpdates();
-        }, 1000 * 60 * 60);
+        const interval = setInterval(checkForUpdates, 1000 * 60 * 60);
 
         return () => clearInterval(interval);
     }, []);
 
+    // drag and drop
+    const processDroppedPayload = useCallback(async (payload: string, htmlData?: string) => {
+        try {
+            let cleanPayload = payload.split(/[\r\n]+/).map(x => x.trim()).find(x => x.length > 0);
+            
+            if ((!cleanPayload || !cleanPayload.startsWith("http")) && htmlData) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlData, "text/html");
+                const img = doc.querySelector("img");
+                if (img && img.src) {
+                    cleanPayload = img.src;
+                }
+            }
+
+            if (!cleanPayload) return;
+
+            console.log("Processing Drop:", cleanPayload);
+            const isUrl = cleanPayload.startsWith("http");
+            const isFile = cleanPayload.match(/^[a-zA-Z]:\\/) || cleanPayload.startsWith("file://") || cleanPayload.startsWith("/");
+            if (!isUrl && !isFile) {
+                return;
+            }
+            
+            const result: any = await invoke('cache_dropped_item', { payload: cleanPayload });
+
+            setEditorData({
+                mode: 'create',
+                filePath: result.temp_path,
+                currentName: "New Sticker",
+                currentPack: ["Recents", "Favorites", "All"].includes(activeTab) ? "" : activeTab
+            });
+        } catch (e) {
+            console.error(e);
+            alert("Failed to process image: " + e);
+        }
+    }, [activeTab]);
+
+    useEffect(() => {
+        let dragCounter = 0;
+
+
+        const handleDragEnter = (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter++;
+            if (dragCounter === 1) setIsDragging(true);
+        };
+
+        const handleDragLeave = (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) setIsDragging(false);
+        };
+
+        const handleDragOver = (e: DragEvent) => e.preventDefault();
+        
+        const handleDrop = (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter = 0;
+            setIsDragging(false);
+
+            const uriData = e.dataTransfer?.getData("text/uri-list");
+            const textData = e.dataTransfer?.getData("text/plain");
+            const htmlData = e.dataTransfer?.getData("text/html");
+            const payload = uriData || textData;
+
+            if (payload || htmlData) {
+                processDroppedPayload(payload || "", htmlData);
+            }
+        };
+
+        
+
+        const handlePaste = (e: ClipboardEvent) => {
+            const target = e.target as HTMLElement;
+            const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            
+            if (isInput) return;
+
+            const textData = e.clipboardData?.getData("text/plain");
+            const htmlData = e.clipboardData?.getData("text/html");
+
+            if (textData || htmlData) {
+                processDroppedPayload(textData || "", htmlData);
+            }
+        };
+
+        window.addEventListener('dragenter', handleDragEnter);
+        window.addEventListener('dragleave', handleDragLeave);
+        window.addEventListener('dragover', handleDragOver);
+        window.addEventListener('drop', handleDrop);
+        window.addEventListener('paste', handlePaste);
+
+
+        const unlistenDrop = listen('tauri://drag-drop', (event: any) => {
+            setIsDragging(false);
+            dragCounter = 0;
+            
+            if (event.payload.paths && event.payload.paths.length > 0) {
+                const firstFile = event.payload.paths[0];
+                processDroppedPayload(firstFile);
+            }
+        });
+
+        const unlistenEnter = listen('tauri://drag-enter', () => {
+            setIsDragging(true);
+        });
+
+        const unlistenLeave = listen('tauri://drag-leave', () => {
+            setIsDragging(false);
+        });
+
+        return () => {
+            window.removeEventListener('dragenter', handleDragEnter);
+            window.removeEventListener('dragleave', handleDragLeave);
+            window.removeEventListener('dragover', handleDragOver);
+            window.removeEventListener('drop', handleDrop);
+            window.removeEventListener('paste', handlePaste);
+            unlistenDrop.then(f => f());
+            unlistenEnter.then(f => f());
+            unlistenLeave.then(f => f());
+        };
+    }, [processDroppedPayload]);
+
+    const handleEditRequest = (sticker: Sticker) => {
+        setEditorData({
+            mode: 'edit',
+            filePath: sticker.path,
+            currentName: sticker.name,
+            currentPack: sticker.pack
+        });
+    };
 
     const scrollTags = (direction: 'left' | 'right') => {
         if (tabsRef.current) {
@@ -80,7 +214,6 @@ function App() {
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && stickers.length > 0) {
-            // We invoke directly here as it's a specific UI interaction
             invoke("select_sticker", { path: stickers[0].path }).catch(console.error);
         }
         if (e.key === "Escape") {
@@ -104,6 +237,28 @@ function App() {
             <Header onToggleSettings={toggleSettings} onRefresh={reloadCurrentView} onClose={handleClose} />
 
             {indexingProgress && <LoadingOverlay progress={indexingProgress} />}
+
+            {/* DRAG OVERLAY */}
+            {isDragging && (
+                <div className="drag-overlay">
+                    <div className="drag-box">
+                        Drop Image Here
+                    </div>
+                </div>
+            )}
+
+            {/* EDITOR MODAL */}
+            {editorData && (
+                <StickerEditorModal 
+                    data={editorData}
+                    packs={packs}
+                    onClose={() => setEditorData(null)}
+                    onSuccess={() => {
+                        reloadCurrentView();
+                        refreshLibrary();
+                    }}
+                />
+            )}
 
             {showSettings && (
                 <SettingsModal
@@ -156,7 +311,7 @@ function App() {
                         </div>
                     )}
 
-                    <StickerGrid stickers={stickers} packs={packs} onReload={reloadCurrentView} />
+                    <StickerGrid stickers={stickers} packs={packs} onReload={reloadCurrentView} onEdit={handleEditRequest} />
                 </div>
             )}
         </div>
