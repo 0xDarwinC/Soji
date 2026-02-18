@@ -50,4 +50,8 @@ uuid = { version = "1.19.0", features = ["v4", "fast-rng"] }
 url = "2.5.8"
 urlencoding = "2.1.3"
 
-
+[profile.release]
+codegen-units = 1
+lto = "thin"      
+strip = true      
+panic = "abort"   

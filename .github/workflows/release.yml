@@ -18,10 +18,16 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.4
+      
+      - name: Set RUSTC_WRAPPER
+        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          work-dir: src-tauri
 
       - name: Sync node version
         uses: actions/setup-node@v4
@@ -30,7 +36,7 @@ jobs:
           cache: 'npm'
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Generate Release Notes
         id: notes
