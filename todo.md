@@ -81,6 +81,11 @@ Test:
 Post-Release Features:
 - [ ] notification service for edit actions and refresh
 - [ ] sort by recency score and A-Z (default)
+- [ ] sticker editor
+    - [ ] see pjsk sticker editor for details
+    - [ ] move text x and y axis, rotate full 360
+    - [ ] additional font options?
+    
 
 Potential features:
 - [ ] Resize gif
