@@ -21,7 +21,7 @@ jobs:
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.4
-      
+
       - name: Set RUSTC_WRAPPER
         run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
@@ -39,8 +39,16 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Build (Cache Only)
+        if: github.ref == 'refs/heads/main'
+        run: npx tauri build
+        env:
+          RUSTC_WRAPPER: "sccache"
+          SCCACHE_GHA_ENABLED: "true" 
+
       - name: Generate Release Notes
         id: notes
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
