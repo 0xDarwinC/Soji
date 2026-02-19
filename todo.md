@@ -69,10 +69,10 @@ for unsupported types and fix them.
 - [ ] Display limit can't go to -1, also hard to enter values
 - [ ] Update dialog text is not correct
 - title bar
+- [ ] fails when image smaller than 160x160. need override. potentially override animated webp too.
 
 Test:
 - [ ] Move method destination outside of user dir subtree
-- [ ] Images smaller than 160x160
 - [ ] Check for updates works...
     - [x] Check for update manually
     - [ ] Notify on startup
