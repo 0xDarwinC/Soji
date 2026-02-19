@@ -26,7 +26,7 @@
 - [x] add close button
 - [x] backup and restore the user's clipboard post paste
     - Note: Should backup and restore most formats but NOT all. Does a byte read.
-- [ ] drag drop your own stickers, auto convert to supported file type
+- [x] drag drop your own stickers, auto convert to supported file type
 - [x] rename and change sticker classification dynamically (move it to a different pack) Make sure to keep the recency/history. 
     - [x] right click menu that can add fav or edit or delete
     - [x] pencil button under heart that can edit the sticker
@@ -69,18 +69,18 @@ for unsupported types and fix them.
 - [ ] Display limit can't go to -1, also hard to enter values
 - [ ] Update dialog text is not correct
 - title bar
-- [ ] fails when image smaller than 160x160. need override. potentially override animated webp too.
+- [x] fails when image smaller than 160x160. 
 - [ ] release yml optimizations
 
 Test:
 - [ ] Move method destination outside of user dir subtree
 - [ ] Check for updates works...
     - [x] Check for update manually
-    - [ ] Notify on startup
+    - [x] Notify on startup
     - [ ] Notify on hourly
 - [ ]  drag and drop
     - [ ] large files >25mb
-    - [ ] new sticker pack
+    - [x] new sticker pack
     - [ ] file types (unsupported vs supp)
 
 
@@ -91,6 +91,7 @@ Post-Release Features:
     - [ ] see pjsk sticker editor for details
     - [ ] move text x and y axis, rotate full 360
     - [ ] additional font options?
+- [ ] animated webp conversion (since discord doesnt support animated webp)
 
 
 Potential features:
