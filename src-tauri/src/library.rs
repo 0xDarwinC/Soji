@@ -176,14 +176,14 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
             let width = img.width();
             let height = img.height();
             
-            let (target_width, target_height) = if width == height {
-                (160, 160)
+            let (target_width, target_height) = if width <= 160 && height <= 160 {
+                (width, height)
             } else if width > height {
-                let w = (width as u32 * 160) / height as u32;
-                (w, 160)
-            } else {
                 let h = (height as u32 * 160) / width as u32;
-                (160, h)
+                (160, std::cmp::max(1, h))
+            } else {
+                let w = (width as u32 * 160) / height as u32;
+                (std::cmp::max(1, w), 160)
             };
 
             let src_image = Image::from_vec_u8(width, height, img.to_rgba8().into_raw(), PixelType::U8x4).unwrap();
