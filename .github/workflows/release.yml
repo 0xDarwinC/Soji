@@ -1,4 +1,5 @@
 name: Release
+
 on:
   push:
     branches: [ "main" ]
@@ -9,9 +10,10 @@ on:
       - '.github/workflows/release.yml'
     tags:
       - 'v*'
-  concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -95,13 +97,18 @@ jobs:
         run: |
           RAW_VERSION="${GITHUB_REF_NAME#v}"
           VERSION=$(echo "$RAW_VERSION" | cut -d'-' -f1)
+          
           echo "Processing Version: $VERSION"
+
           SIG_PATH=$(find src-tauri/target/release/bundle/nsis -name "*.exe.sig" | head -n 1)
+          
           if [ -z "$SIG_PATH" ]; then
             echo "Error: Could not find any .exe.sig file"
             exit 1
           fi
+
           SIG=$(cat "$SIG_PATH")
+
           FILENAME="soji_${VERSION}_x64-setup.exe"
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${FILENAME}"
           
@@ -115,7 +122,12 @@ jobs:
               version: $ver,
               notes: $notes,
               pub_date: $date,
-              platforms: { "windows-x86_64": { signature: $sig, url: $url } }
+              platforms: {
+                "windows-x86_64": {
+                  signature: $sig,
+                  url: $url
+                }
+              }
             }')
           echo "$JSON_CONTENT" > latest.json
           gh gist edit $GIST_ID --add "latest.json"
