@@ -70,6 +70,7 @@ for unsupported types and fix them.
 - [ ] Update dialog text is not correct
 - title bar
 - [ ] fails when image smaller than 160x160. need override. potentially override animated webp too.
+- [ ] release yml optimizations
 
 Test:
 - [ ] Move method destination outside of user dir subtree
