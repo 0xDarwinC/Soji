@@ -42,11 +42,54 @@ pub fn restore(backup: ClipboardBackup) {
     }
 }
 
-pub fn copy_sticker_to_clipboard(path: &str, _thumb_dir: &Path) -> Result<(), String> {
+// reads 21 bytes to find vp8x flag
+fn is_animated_webp(path: &Path) -> bool {
+    use std::fs::File;
+    use std::io::Read;
+    
+    let mut file = match File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    
+    let mut buffer = [0; 256];
+    let bytes_read = file.read(&mut buffer).unwrap_or(0);
+    
+    if bytes_read < 21 { 
+        return false; 
+    }
+    
+    if &buffer[0..4] != b"RIFF" || &buffer[8..12] != b"WEBP" {
+        return false;
+    }
+    
+    if &buffer[12..16] == b"VP8X" {
+        let has_animation_bit = (buffer[20] & 0x02) != 0;
+        
+        if has_animation_bit {
+            return buffer[..bytes_read].windows(4).any(|window| window == b"ANIM");
+        }
+    }
+    
+    false
+}
+
+pub fn copy_sticker_to_clipboard(path: &str, thumb_dir: &Path) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
     let extension = path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
 
-    if ["gif", "webp"].contains(&extension.as_str()) {
+    // if its an animated format we treat them differently
+    // might add more formats in future if required
+    let is_animated = 
+    if extension == "gif"{
+        true
+    } else if extension == "webp"{
+        is_animated_webp(&path_buf)
+    } else {
+        false
+    };
+
+    if is_animated {
         let _ = (|| -> Result<(), String> {
             let _clip = WinClipboard::new_attempts(10).map_err(|e| e.to_string())?;
             let files = vec![path.to_string()];
@@ -54,10 +97,20 @@ pub fn copy_sticker_to_clipboard(path: &str, _thumb_dir: &Path) -> Result<(), St
             Ok(())
         })().map_err(|e| format!("Clipboard error: {}", e))?;
     } else {
+        let mut hasher = sha2::Sha256::new();
+        use sha2::Digest;
+        hasher.update(path.as_bytes());
+        let hash = hex::encode(hasher.finalize());
+        let thumb_path = thumb_dir.join(format!("{}.webp", hash));
+
+        let load_path = if thumb_path.exists() { thumb_path } else { path_buf };
+
         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
         
-        let img = ImageReader::open(&path_buf)
+        let img = ImageReader::open(&load_path)
             .map_err(|e| format!("Failed to open image: {}", e))?
+            .with_guessed_format()
+            .map_err(|e| format!("Failed to guess format: {}", e))?
             .decode()
             .map_err(|e| format!("Failed to decode image: {}", e))?;
             
