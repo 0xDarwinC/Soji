@@ -70,7 +70,9 @@ for unsupported types and fix them.
 - [ ] Update dialog text is not correct
 - title bar
 - [x] fails when image smaller than 160x160. 
-- [ ] release yml optimizations
+- [ ] release yml optimizations not working
+- [ ] need to autofocus search and clear search after sticker drop
+- [ ] multiple update dialogs for some users
 
 Test:
 - [ ] Move method destination outside of user dir subtree
@@ -91,7 +93,8 @@ Post-Release Features:
     - [ ] see pjsk sticker editor for details
     - [ ] move text x and y axis, rotate full 360
     - [ ] additional font options?
-- [ ] animated webp conversion (since discord doesnt support animated webp)
+- [ ] animated webp conversion (since discord doesnt support animated webp
+
 
 
 Potential features:
