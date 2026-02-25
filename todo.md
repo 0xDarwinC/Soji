@@ -73,6 +73,7 @@ for unsupported types and fix them.
 - [ ] release yml optimizations not working
 - [ ] need to autofocus search and clear search after sticker drop
 - [ ] multiple update dialogs for some users
+    - [ ] if dialog exists dont proc another
 
 Test:
 - [ ] Move method destination outside of user dir subtree
@@ -93,7 +94,10 @@ Post-Release Features:
     - [ ] see pjsk sticker editor for details
     - [ ] move text x and y axis, rotate full 360
     - [ ] additional font options?
-- [ ] animated webp conversion (since discord doesnt support animated webp
+- [ ] animated formats conversion using vid2gif (ffmpeg wrapper) or other crates
+    - [ ] if animated webp, then gif
+    - [ ] if webm, then gif
+    - [ ] other formats as necessary
 
 
 
