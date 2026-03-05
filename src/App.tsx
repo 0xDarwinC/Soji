@@ -28,12 +28,24 @@ function App() {
     const [editorData, setEditorData] = useState<EditorData | null>(null);
     const [isDragging, setIsDragging] = useState(false);
 
-    // Initial focus
     useEffect(() => {
         setTimeout(() => {
             inputRef.current?.focus();
             inputRef.current?.select();
         }, 50);
+
+        const unlistenAppShown = listen('app_shown', () => {
+            handleSearch("");
+
+            setTimeout(() => {
+                inputRef.current?.focus();
+                inputRef.current?.select();
+            }, 50);
+        });
+
+        return () => {
+            unlistenAppShown.then(f => f());
+        };
     }, []);
 
     useEffect(() => {
@@ -74,7 +86,7 @@ function App() {
     const processDroppedPayload = useCallback(async (payload: string, htmlData?: string) => {
         try {
             let cleanPayload = payload.split(/[\r\n]+/).map(x => x.trim()).find(x => x.length > 0);
-            
+
             if ((!cleanPayload || !cleanPayload.startsWith("http")) && htmlData) {
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlData, "text/html");
@@ -92,7 +104,7 @@ function App() {
             if (!isUrl && !isFile) {
                 return;
             }
-            
+
             const result: any = await invoke('cache_dropped_item', { payload: cleanPayload });
 
             setEditorData({
@@ -124,7 +136,7 @@ function App() {
         };
 
         const handleDragOver = (e: DragEvent) => e.preventDefault();
-        
+
         const handleDrop = (e: DragEvent) => {
             e.preventDefault();
             dragCounter = 0;
@@ -140,12 +152,12 @@ function App() {
             }
         };
 
-        
+
 
         const handlePaste = (e: ClipboardEvent) => {
             const target = e.target as HTMLElement;
             const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-            
+
             if (isInput) return;
 
             const textData = e.clipboardData?.getData("text/plain");
@@ -166,7 +178,7 @@ function App() {
         const unlistenDrop = listen('tauri://drag-drop', (event: any) => {
             setIsDragging(false);
             dragCounter = 0;
-            
+
             if (event.payload.paths && event.payload.paths.length > 0) {
                 const firstFile = event.payload.paths[0];
                 processDroppedPayload(firstFile);
@@ -249,7 +261,7 @@ function App() {
 
             {/* EDITOR MODAL */}
             {editorData && (
-                <StickerEditorModal 
+                <StickerEditorModal
                     data={editorData}
                     packs={packs}
                     onClose={() => setEditorData(null)}
