@@ -71,7 +71,7 @@ for unsupported types and fix them.
 - title bar
 - [x] fails when image smaller than 160x160. 
 - [ ] release yml optimizations not working
-- [ ] need to autofocus search and clear search after sticker drop
+- [x] need to autofocus search and clear search after sticker drop
 - [ ] multiple update dialogs for some users
     - [ ] if dialog exists dont proc another
 
