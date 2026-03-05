@@ -28,6 +28,15 @@ function App() {
     const [editorData, setEditorData] = useState<EditorData | null>(null);
     const [isDragging, setIsDragging] = useState(false);
 
+    const appStateRef = useRef({ query, activeTab, handleSearch, handleTabClick, reloadCurrentView });
+    useEffect(() => {
+        appStateRef.current = { query, activeTab, handleSearch, handleTabClick, reloadCurrentView };
+    }, [query, activeTab, handleSearch, handleTabClick, reloadCurrentView]);
+
+    useEffect(() => {
+        appStateRef.current = { query, activeTab, handleSearch, handleTabClick, reloadCurrentView };
+    }, [query, activeTab, handleSearch, handleTabClick, reloadCurrentView]);
+
     useEffect(() => {
         setTimeout(() => {
             inputRef.current?.focus();
@@ -35,7 +44,20 @@ function App() {
         }, 50);
 
         const unlistenAppShown = listen('app_shown', () => {
-            handleSearch("");
+            const current = appStateRef.current;
+            const needsTabReset = current.activeTab !== "Recents";
+
+            if (current.query !== "") {
+                current.handleSearch("");
+            }
+
+            if (needsTabReset) {
+                setTimeout(() => {
+                    appStateRef.current.handleTabClick("Recents");
+                }, 10);
+            } else {
+                appStateRef.current.reloadCurrentView();
+            }
 
             setTimeout(() => {
                 inputRef.current?.focus();
@@ -152,8 +174,6 @@ function App() {
             }
         };
 
-
-
         const handlePaste = (e: ClipboardEvent) => {
             const target = e.target as HTMLElement;
             const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -235,6 +255,14 @@ function App() {
 
     const handleClose = () => invoke("hide_window");
 
+    // wraps handle search so it searches all dirs not current
+    const handleGlobalSearch = (val: string) => {
+        if (val.length > 0 && activeTab !== "All") {
+            handleTabClick("All");
+        }
+        handleSearch(val);
+    };
+
     return (
         <div
             className={settings.disable_animations ? "no-animations" : ""}
@@ -287,7 +315,7 @@ function App() {
                     <SearchBar
                         ref={inputRef}
                         query={query}
-                        onSearch={handleSearch}
+                        onSearch={handleGlobalSearch}
                         onKeyDown={handleKeyDown}
                     />
                     {/* TAGS NAVIGATION */}
