@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import { invoke } from "@tauri-apps/api/core";
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { AppSettings } from '../../types';
@@ -110,10 +110,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                 <div className="settings-section">
                     <label className="settings-label">Library</label>
                     <div className="settings-row">
-                        <input 
-                            readOnly 
-                            value={settings.sticker_path || "Default (Pictures/Stickers)"} 
-                            className="settings-input-readonly" 
+                        <input
+                            readOnly
+                            value={settings.sticker_path || "Default (Pictures/Stickers)"}
+                            className="settings-input-readonly"
                         />
                         <button onClick={handleChooseFolder} className="settings-btn-primary">Change</button>
                     </div>
@@ -123,30 +123,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                 <div className="settings-section">
                     <label className="settings-label">Appearance</label>
                     <div className="settings-row">
-                        <button 
-                            onClick={() => onSaveSettings({...settings, theme: "acrylic"})} 
+                        <button
+                            onClick={() => onSaveSettings({ ...settings, theme: "acrylic" })}
                             className="settings-btn-toggle"
-                            style={{ 
-                                background: settings.theme === "acrylic" ? "white" : "transparent", 
-                                color: settings.theme === "acrylic" ? "black" : "white" 
+                            style={{
+                                background: settings.theme === "acrylic" ? "white" : "transparent",
+                                color: settings.theme === "acrylic" ? "black" : "white"
                             }}
                         >
                             Acrylic (Blur)
                         </button>
-                        <button 
-                            onClick={() => onSaveSettings({...settings, theme: "mica"})} 
+                        <button
+                            onClick={() => onSaveSettings({ ...settings, theme: "mica" })}
                             className="settings-btn-toggle"
-                            style={{ 
-                                background: settings.theme === "mica" ? "white" : "transparent", 
-                                color: settings.theme === "mica" ? "black" : "white" 
+                            style={{
+                                background: settings.theme === "mica" ? "white" : "transparent",
+                                color: settings.theme === "mica" ? "black" : "white"
                             }}
                         >
                             Mica (Tint)
                         </button>
                     </div>
                     <div className="settings-row" style={{ marginTop: "5px" }}>
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             id="disableAnimations"
                             checked={settings.disable_animations}
                             onChange={(e) => onSaveSettings({ ...settings, disable_animations: e.target.checked })}
@@ -155,8 +155,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                         <label htmlFor="disableAnimations" style={{ fontSize: "14px", cursor: "pointer" }}>Disable Animations</label>
                     </div>
                     <div className="settings-row">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             id="runOnStartup"
                             checked={settings.run_on_startup}
                             onChange={(e) => onSaveSettings({ ...settings, run_on_startup: e.target.checked })}
@@ -171,23 +171,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                     <label className="settings-label">Data</label>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: "14px", color: "white" }}>Recents Limit</span>
-                        <input 
-                            type="number" 
-                            min="1" 
-                            max="100" 
-                            value={settings.recents_limit} 
-                            onChange={(e) => onSaveSettings({ ...settings, recents_limit: parseInt(e.target.value) || 18 })} 
-                            style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }} 
+                        <input
+                            type="number"
+                            min="1"
+                            value={settings.recents_limit}
+                            onChange={(e) => onSaveSettings({ ...settings, recents_limit: parseInt(e.target.value) ?? 18 })}
+                            style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }}
                         />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "5px" }}>
                         <span style={{ fontSize: "14px", color: "white" }}>Max Items (-1 for All)</span>
-                        <input 
-                            type="number" 
-                            min="-1" max="10000" 
-                            value={settings.max_items} 
-                            onChange={(e) => onSaveSettings({ ...settings, max_items: parseInt(e.target.value) || 200 })} 
-                            style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }} 
+                        <input
+                            type="number"
+                            min="-1"
+                            value={settings.max_items.toString()}
+                            onChange={(e) => onSaveSettings({ ...settings, max_items: parseInt(e.target.value) ?? 200 })}
+                            style={{ width: "60px", padding: "6px", borderRadius: "5px", border: "none", background: "rgba(0,0,0,0.5)", color: "white", textAlign: "center" }}
                         />
                     </div>
                     <div className="settings-row" style={{ marginTop: "10px" }}>
@@ -195,22 +194,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                         <button onClick={() => handleWipeData("favorites")} className="settings-btn-danger">Wipe Favs</button>
                     </div>
                     <button onClick={() => handleWipeData("db")} className="settings-btn-danger-block">Reset Library & Cache</button>
-                    
+
                     <button onClick={handleRestoreDefaults} className="settings-btn-default">
                         Restore Default Settings
                     </button>
-                {/* UPDATES */}
-                <div className="settings-section">
-                    <label className="settings-label">Updates</label>
-                    <button onClick={handleCheckUpdate} className="settings-btn-primary" style={{width: '100%'}}>
-                        Check for Updates
-                    </button>
-                    {updateStatus && (
-                        <div style={{ fontSize: '13px', marginTop: '5px', opacity: 0.7, textAlign: 'center' }}>
-                            {updateStatus}
-                        </div>
-                    )}
-                </div>
+                    {/* UPDATES */}
+                    <div className="settings-section">
+                        <label className="settings-label">Updates</label>
+                        <button onClick={handleCheckUpdate} className="settings-btn-primary" style={{ width: '100%' }}>
+                            Check for Updates
+                        </button>
+                        {updateStatus && (
+                            <div style={{ fontSize: '13px', marginTop: '5px', opacity: 0.7, textAlign: 'center' }}>
+                                {updateStatus}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

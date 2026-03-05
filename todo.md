@@ -66,12 +66,12 @@ Bugs:
 for unsupported types and fix them.
 - [x] Move pack menu and settings menu has right click context menu -- need to disable
 - [ ] Check for updates text result doesnt show immediately, needs to scroll to fit into window
-- [ ] Display limit can't go to -1, also hard to enter values
+- [x] Display limit can't go to -1, also hard to enter values
 - [ ] Update dialog text is not correct
 - title bar
 - [x] fails when image smaller than 160x160. 
 - [ ] release yml optimizations not working
-- [ ] need to autofocus search and clear search after sticker drop
+- [x] need to autofocus search and clear search after sticker drop
 - [ ] multiple update dialogs for some users
     - [ ] if dialog exists dont proc another
 
