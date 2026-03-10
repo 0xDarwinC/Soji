@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { invoke } from "@tauri-apps/api/core";
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { AppSettings } from '../../types';
@@ -15,6 +15,12 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSettings, onClose, onRefreshRequest }) => {
     const [updateStatus, setUpdateStatus] = useState("");
+    const bottomRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (updateStatus) {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [updateStatus]);
     const handleCheckUpdate = async () => {
         setUpdateStatus("Checking...");
         try {
@@ -211,6 +217,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                         )}
                     </div>
                 </div>
+                <div ref={bottomRef} />
             </div>
         </div>
     );
