@@ -74,7 +74,8 @@ for unsupported types and fix them.
 - [x] need to autofocus search and clear search after sticker drop
 - [ ] multiple update dialogs for some users
     - [ ] if dialog exists dont proc another
-
+- [ ] can't minimize window while indexing
+  
 Test:
 - [ ] Move method destination outside of user dir subtree
 - [ ] Check for updates works...
@@ -85,6 +86,7 @@ Test:
     - [ ] large files >25mb
     - [x] new sticker pack
     - [ ] file types (unsupported vs supp)
+
 
 
 Post-Release Features:
