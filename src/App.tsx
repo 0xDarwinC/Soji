@@ -15,6 +15,8 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { StickerEditorModal, EditorData } from "./components/StickerEditor/StickerEditorModal";
 import { Sticker } from "./types";
 
+let isUpdateDialogOpen = false;
+
 function App() {
     const { settings, showSettings, setShowSettings, saveSettings, toggleSettings } = useSettings();
     const {
@@ -72,10 +74,12 @@ function App() {
 
     useEffect(() => {
         const checkForUpdates = async () => {
+            if (isUpdateDialogOpen) return;
             try {
                 const update = await check();
 
                 if (update) {
+                    isUpdateDialogOpen = true;
                     console.log(`Found update: ${update.version} from ${update.date}`);
 
                     const yes = await ask(
@@ -91,8 +95,10 @@ function App() {
                         await update.downloadAndInstall();
                         await relaunch();
                     }
+                    isUpdateDialogOpen = false;
                 }
             } catch (err) {
+                isUpdateDialogOpen = false;
                 console.error("Failed to check for updates:", err);
             }
         };
@@ -274,8 +280,10 @@ function App() {
                 color: "white"
             }}
         >
-            <Header onToggleSettings={toggleSettings} onRefresh={reloadCurrentView} onClose={handleClose} />
 
+            <div style={{ position: "relative", zIndex: 300 }}>
+                <Header onToggleSettings={toggleSettings} onRefresh={reloadCurrentView} onClose={handleClose} />
+            </div>
             {indexingProgress && <LoadingOverlay progress={indexingProgress} />}
 
             {/* DRAG OVERLAY */}
