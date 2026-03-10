@@ -1,9 +1,6 @@
 - [x] core functionality (add stickers to db and select them on click)
 - [x] tabs
 - [x] refresh button next to settings button (calls refresh_library)
-- [ ] help button 
-    - [ ] a one-page tutorial that shows how to set it up
-    - [ ] credits, contributors, and donate button
 - [x] settings
     - [x] Switch from acrylic to mica for performance
     - [x] Wipe recency/history cache (with an extra confirmation)
@@ -32,17 +29,20 @@
     - [x] pencil button under heart that can edit the sticker
     - [x] change pack while keeping its history
 - [x] hovering sticker buttons for feedback, perhaps sfx
-- [ ] make window be an offset from cursor like emoji keyboard
-    - [ ] Perhaps different behavior if cursor not in a textbox.
 - [x] make window resizable
-- [ ] system tray features
-    - [ ] closing window should minimize to system tray
-    - [ ] system tray with soji logo
 - [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
     - [x] clean up the repo
     - [ ] add documentation
+- [ ] make window be an offset from cursor like emoji keyboard
+    - [ ] Perhaps different behavior if cursor not in a textbox.
+    - [ ] system tray with soji logo
+- [ ] help button 
+    - [ ] a one-page tutorial that shows how to set it up
+    - [ ] credits, contributors, and donate button
+- [ ] system tray features
+    - [ ] closing window should minimize to system tray
 - [ ] improve ui
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
@@ -62,29 +62,16 @@
     - [ ] youtube video product demo
 
 Bugs:
-- [x] Clipboard restoration will not support ALL file types. Need to exhaustively search
-for unsupported types and fix them.
-- [x] Move pack menu and settings menu has right click context menu -- need to disable
-- [x] Check for updates text result doesnt show immediately, needs to scroll to fit into window
-- [x] Display limit can't go to -1, also hard to enter values
 - [ ] Update dialog text is not correct
 - title bar
-- [x] fails when image smaller than 160x160. 
 - [ ] release yml optimizations not working
-- [x] need to autofocus search and clear search after sticker drop
-- [x] multiple update dialogs for some users
-    - [x] if dialog exists dont proc another
-- [x] can't minimize window while indexing
   
 Test:
 - [ ] Move method destination outside of user dir subtree
 - [ ] Check for updates works...
-    - [x] Check for update manually
-    - [x] Notify on startup
     - [ ] Notify on hourly
 - [ ]  drag and drop
     - [ ] large files >25mb
-    - [x] new sticker pack
     - [ ] file types (unsupported vs supp)
 
 
