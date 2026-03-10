@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use tauri::PhysicalSize;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sticker {
@@ -41,6 +42,8 @@ impl Default for AppSettings {
 pub struct AppState {
     pub db_path: PathBuf,
     pub is_indexing: Arc<AtomicBool>,
+    pub custom_size: Arc<Mutex<Option<PhysicalSize<u32>>>>,
+    pub is_centered_mode: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Serialize)]

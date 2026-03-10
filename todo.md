@@ -37,12 +37,13 @@
     - [ ] add documentation
 - [ ] make window be an offset from cursor like emoji keyboard
     - [ ] Perhaps different behavior if cursor not in a textbox.
-    - [ ] system tray with soji logo
+
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
 - [ ] system tray features
     - [ ] closing window should minimize to system tray
+    - [ ] system tray with soji logo
 - [ ] improve ui
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
