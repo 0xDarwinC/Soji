@@ -17,7 +17,7 @@ pub mod watcher;
 
 // gets pos of cursor in textbox
 fn get_caret_position() -> Option<(i32, i32)> {
-    use windows::Win32::Foundation::{HWND, POINT};
+    use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::ClientToScreen;
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
@@ -95,8 +95,9 @@ pub fn run() {
                 .register(shortcut)
                 .expect("Failed to register global shortcut");
 
+            let index_handle = handle.clone();
             tauri::async_runtime::spawn(async move {
-                library::index_library(&handle, db_path, thumb_dir);
+                library::index_library(&index_handle, db_path, thumb_dir);
             });
 
             let resize_handle = handle.clone();
