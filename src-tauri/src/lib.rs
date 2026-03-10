@@ -19,24 +19,27 @@ pub mod watcher;
 fn get_caret_position() -> Option<(i32, i32)> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::ClientToScreen;
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    };
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, UIA_DocumentControlTypeId, UIA_EditControlTypeId,
+    };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
+        GetCursorPos, GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId,
+        GUITHREADINFO,
     };
 
     unsafe {
         let hwnd = GetForegroundWindow();
-        if hwnd.0 == 0 {
-            return None;
-        }
+        if hwnd.0 != 0 {
+            let thread_id = GetWindowThreadProcessId(hwnd, None);
+            let mut gui_info = GUITHREADINFO {
+                cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+                ..Default::default()
+            };
 
-        let thread_id = GetWindowThreadProcessId(hwnd, None);
-        let mut gui_info = GUITHREADINFO {
-            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-            ..Default::default()
-        };
-
-        if GetGUIThreadInfo(thread_id, &mut gui_info).is_ok() {
-            if gui_info.hwndCaret.0 != 0 {
+            if GetGUIThreadInfo(thread_id, &mut gui_info).is_ok() && gui_info.hwndCaret.0 != 0 {
                 let mut pt = POINT {
                     x: gui_info.rcCaret.left,
                     y: gui_info.rcCaret.bottom,
@@ -45,6 +48,25 @@ fn get_caret_position() -> Option<(i32, i32)> {
                 return Some((pt.x, pt.y));
             }
         }
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+        if let Ok(automation) =
+            CoCreateInstance::<_, IUIAutomation>(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+        {
+            if let Ok(focused_element) = automation.GetFocusedElement() {
+                if let Ok(control_type) = focused_element.CurrentControlType() {
+                    if control_type.0 == UIA_EditControlTypeId.0
+                        || control_type.0 == UIA_DocumentControlTypeId.0
+                    {
+                        let mut pt = POINT::default();
+                        if GetCursorPos(&mut pt).is_ok() {
+                            return Some((pt.x, pt.y));
+                        }
+                    }
+                }
+            }
+        }
+
         None
     }
 }
