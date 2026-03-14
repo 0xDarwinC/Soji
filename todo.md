@@ -49,6 +49,7 @@
     - [ ] graphics when no results, empty sticker folder, etc
     - [ ] make dialogs styled (deletion, reindexing, renaming, updates)
     - [ ] our own images instead of emojis for buttons
+    - [ ] remove text from titlebar
 - [ ] release and setup executable. user should be able to determine their settings in this step.
     - [x] Pre release and setup executable.
     - [ ] Needs to be able to configure following settings:
@@ -64,7 +65,6 @@
 
 Bugs:
 - [ ] Update dialog text is not correct
-- title bar
 - [ ] release yml optimizations not working
   
 Test:
