@@ -9,7 +9,7 @@ use crate::models::AppState;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 
@@ -19,54 +19,78 @@ pub mod watcher;
 fn get_caret_position() -> Option<(i32, i32)> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::ClientToScreen;
+    use windows::Win32::UI::WindowsAndMessaging::{GetGUIThreadInfo, GUITHREADINFO};
+
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    use windows::Win32::UI::Accessibility::{
-        CUIAutomation, IUIAutomation, UIA_DocumentControlTypeId, UIA_EditControlTypeId,
+    // FIX 1: SafeArray functions live in the Ole module
+    use windows::Win32::System::Ole::{
+        SafeArrayAccessData, SafeArrayDestroy, SafeArrayUnaccessData,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId,
-        GUITHREADINFO,
+    // FIX 2: Imported IUIAutomationTextRange
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationTextPattern2, IUIAutomationTextRange,
+        UIA_TextPattern2Id,
     };
 
     unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0 != 0 {
-            let thread_id = GetWindowThreadProcessId(hwnd, None);
-            let mut gui_info = GUITHREADINFO {
-                cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-                ..Default::default()
-            };
+        let mut gui_info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
 
-            if GetGUIThreadInfo(thread_id, &mut gui_info).is_ok() && gui_info.hwndCaret.0 != 0 {
-                let mut pt = POINT {
-                    x: gui_info.rcCaret.left,
-                    y: gui_info.rcCaret.bottom,
-                };
-                let _ = ClientToScreen(gui_info.hwndCaret, &mut pt);
-                return Some((pt.x, pt.y));
-            }
+        if GetGUIThreadInfo(0, &mut gui_info).is_ok() && gui_info.hwndCaret.0 != 0 {
+            let mut pt = POINT {
+                x: gui_info.rcCaret.left,
+                y: gui_info.rcCaret.bottom,
+            };
+            let _ = ClientToScreen(gui_info.hwndCaret, &mut pt);
+            return Some((pt.x, pt.y));
         }
+
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
         if let Ok(automation) =
             CoCreateInstance::<_, IUIAutomation>(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
         {
-            if let Ok(focused_element) = automation.GetFocusedElement() {
-                if let Ok(control_type) = focused_element.CurrentControlType() {
-                    if control_type.0 == UIA_EditControlTypeId.0
-                        || control_type.0 == UIA_DocumentControlTypeId.0
-                    {
-                        let mut pt = POINT::default();
-                        if GetCursorPos(&mut pt).is_ok() {
-                            return Some((pt.x, pt.y));
+            if let Ok(focused) = automation.GetFocusedElement() {
+                if let Ok(pattern) =
+                    focused.GetCurrentPatternAs::<IUIAutomationTextPattern2>(UIA_TextPattern2Id)
+                {
+                    let mut is_active = windows::Win32::Foundation::BOOL::from(false);
+                    let mut caret_range: Option<IUIAutomationTextRange> = None;
+
+                    if let Ok(_) = pattern.GetCaretRange(&mut is_active, &mut caret_range) {
+                        if is_active.as_bool() {
+                            if let Some(caret_range) = caret_range {
+                                if let Ok(safearray_ptr) = caret_range.GetBoundingRectangles() {
+                                    if !safearray_ptr.is_null() {
+                                        let mut raw_data: *mut std::ffi::c_void =
+                                            std::ptr::null_mut();
+
+                                        if SafeArrayAccessData(safearray_ptr, &mut raw_data).is_ok()
+                                        {
+                                            let data = raw_data as *const f64;
+
+                                            let left = *data.offset(0);
+                                            let top = *data.offset(1);
+                                            let _width = *data.offset(2);
+                                            let height = *data.offset(3);
+
+                                            let _ = SafeArrayUnaccessData(safearray_ptr);
+                                            let _ = SafeArrayDestroy(safearray_ptr);
+
+                                            return Some((left as i32, (top + height) as i32 + 10));
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-
         None
     }
 }
@@ -164,38 +188,25 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                     let _ = window.hide();
                 } else {
                     let state = app.state::<crate::models::AppState>();
+
                     let caret_pos = get_caret_position();
 
                     if let Some((x, y)) = caret_pos {
+                        // textbox mode
                         state.is_centered_mode.store(false, Ordering::SeqCst);
 
                         if let Some(size) = *state.custom_size.lock().unwrap() {
                             let _ = window.set_size(size);
                         } else {
-                            let _ = window.set_size(tauri::LogicalSize::new(450, 500));
+                            let _ = window.set_size(PhysicalSize::new(450, 500));
                         }
 
-                        let mut final_x = x;
-                        let mut final_y = y + 20;
-
-                        if let Ok(Some(monitor)) = window.current_monitor() {
-                            let m_pos = monitor.position();
-                            let m_size = monitor.size();
-                            let w_size = window.outer_size().unwrap_or_default();
-
-                            if final_x + (w_size.width as i32) > m_pos.x + (m_size.width as i32) {
-                                final_x = m_pos.x + (m_size.width as i32) - (w_size.width as i32);
-                            }
-                            if final_y + (w_size.height as i32) > m_pos.y + (m_size.height as i32) {
-                                final_y = y - (w_size.height as i32) - 10;
-                            }
-                        }
-
-                        let _ = window.set_position(tauri::PhysicalPosition::new(final_x, final_y));
+                        let _ = window.set_position(PhysicalPosition::new(x, y));
                     } else {
+                        // default mode
                         state.is_centered_mode.store(true, Ordering::SeqCst);
 
-                        let _ = window.set_size(tauri::LogicalSize::new(800, 600));
+                        let _ = window.set_size(LogicalSize::new(800, 600));
                         let _ = window.center();
                     }
 

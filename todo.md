@@ -37,7 +37,7 @@
     - [ ] add documentation
 - [ ] make window be an offset from cursor like emoji keyboard
     - [ ] Perhaps different behavior if cursor not in a textbox.
-
+- [ ] authenticode certificate
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
