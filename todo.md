@@ -66,6 +66,8 @@
 Bugs:
 - [ ] Update dialog text is not correct
 - [ ] release yml optimizations not working
+- [ ] fuzzy search needs to be improved
+    - [ ] instead of just fuzzy, match any keys
   
 Test:
 - [ ] Move method destination outside of user dir subtree
