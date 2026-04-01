@@ -68,7 +68,8 @@ Bugs:
 - [ ] release yml optimizations not working
 - [ ] fuzzy search needs to be improved
     - [ ] instead of just fuzzy, match any keys
-  
+- [ ] remove ability to highlight text within app
+
 Test:
 - [ ] Move method destination outside of user dir subtree
 - [ ] Check for updates works...
