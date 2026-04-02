@@ -35,19 +35,22 @@
     - [x] Only render what you need. But the objects need to exist for search
     - [x] clean up the repo
     - [ ] add documentation
-- [ ] make window be an offset from cursor like emoji keyboard
-    - [ ] Perhaps different behavior if cursor not in a textbox.
-    - [ ] system tray with soji logo
+- [x] make window be an offset from cursor like emoji keyboard
+    - [x] Perhaps different behavior if cursor not in a textbox.
+- [ ] Pretext integration for efficient layout calcs
+- [ ] authenticode certificate
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
 - [ ] system tray features
     - [ ] closing window should minimize to system tray
+    - [ ] system tray with soji logo
 - [ ] improve ui
     - [x] fix scrollbar for tags
     - [ ] graphics when no results, empty sticker folder, etc
     - [ ] make dialogs styled (deletion, reindexing, renaming, updates)
     - [ ] our own images instead of emojis for buttons
+    - [ ] remove text from titlebar
 - [ ] release and setup executable. user should be able to determine their settings in this step.
     - [x] Pre release and setup executable.
     - [ ] Needs to be able to configure following settings:
@@ -63,9 +66,11 @@
 
 Bugs:
 - [ ] Update dialog text is not correct
-- title bar
 - [ ] release yml optimizations not working
-  
+- [ ] fuzzy search needs to be improved
+    - [ ] instead of just fuzzy, match any keys
+- [ ] remove ability to highlight text within app
+
 Test:
 - [ ] Move method destination outside of user dir subtree
 - [ ] Check for updates works...
@@ -73,7 +78,7 @@ Test:
 - [ ]  drag and drop
     - [ ] large files >25mb
     - [ ] file types (unsupported vs supp)
-
+- [ ] app interactions with multi monitor setup
 
 
 Post-Release Features:
@@ -87,6 +92,7 @@ Post-Release Features:
     - [ ] if animated webp, then gif
     - [ ] if webm, then gif
     - [ ] other formats as necessary
+- [ ] Masonry Layout option
 
 
 
