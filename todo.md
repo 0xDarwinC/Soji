@@ -37,6 +37,7 @@
     - [ ] add documentation
 - [ ] make window be an offset from cursor like emoji keyboard
     - [ ] Perhaps different behavior if cursor not in a textbox.
+- [ ] Pretext integration for efficient layout calcs
 - [ ] authenticode certificate
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
@@ -91,6 +92,7 @@ Post-Release Features:
     - [ ] if animated webp, then gif
     - [ ] if webm, then gif
     - [ ] other formats as necessary
+- [ ] Masonry Layout option
 
 
 
