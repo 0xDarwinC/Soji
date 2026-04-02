@@ -37,8 +37,8 @@
     - [ ] add documentation
 - [x] make window be an offset from cursor like emoji keyboard
     - [x] Perhaps different behavior if cursor not in a textbox.
+    - [ ] If user opens settings, or any edit interaction, switches to workspace mode
 - [ ] Pretext integration for efficient layout calcs
-- [ ] authenticode certificate
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
