@@ -29,11 +29,11 @@ fn get_caret_position() -> Option<(i32, i32)> {
     };
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, IUIAutomationTextPattern2, IUIAutomationTextRange,
-        UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_TextPattern2Id,
+        UIA_EditControlTypeId, UIA_TextPattern2Id,
     };
 
     unsafe {
-        println!("\n--- [DEBUG] STARTING CARET SEARCH ---");
+        //println!("\n--- [DEBUG] STARTING CARET SEARCH ---");
         let mut gui_info = GUITHREADINFO {
             cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
             ..Default::default()
@@ -45,14 +45,14 @@ fn get_caret_position() -> Option<(i32, i32)> {
                 y: gui_info.rcCaret.bottom,
             };
             let _ = ClientToScreen(gui_info.hwndCaret, &mut pt);
-            println!(
-                "[DEBUG] Win32 Caret found at Physical X:{}, Y:{}",
-                pt.x, pt.y
-            );
+            //println!(
+            //    "[DEBUG] Win32 Caret found at Physical X:{}, Y:{}",
+            //    pt.x, pt.y
+            //);
             return Some((pt.x, pt.y));
         }
 
-        println!("[DEBUG] Win32 failed. Initializing UI Automation (COM)...");
+        //println!("[DEBUG] Win32 failed. Initializing UI Automation (COM)...");
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
         if let Ok(automation) =
@@ -70,22 +70,33 @@ fn get_caret_position() -> Option<(i32, i32)> {
                             if let Some(caret_range) = caret_range {
                                 if let Ok(safearray_ptr) = caret_range.GetBoundingRectangles() {
                                     if !safearray_ptr.is_null() {
-                                        let mut raw_data: *mut std::ffi::c_void =
-                                            std::ptr::null_mut();
+                                        let c_elements = (*safearray_ptr).rgsabound[0].cElements;
 
-                                        if SafeArrayAccessData(safearray_ptr, &mut raw_data).is_ok()
-                                        {
-                                            let data = raw_data as *const f64;
-                                            let left = *data.offset(0);
-                                            let top = *data.offset(1);
-                                            let height = *data.offset(3);
+                                        if c_elements >= 4 {
+                                            let mut raw_data: *mut std::ffi::c_void =
+                                                std::ptr::null_mut();
 
-                                            let _ = SafeArrayUnaccessData(safearray_ptr);
-                                            let _ = SafeArrayDestroy(safearray_ptr);
+                                            if SafeArrayAccessData(safearray_ptr, &mut raw_data)
+                                                .is_ok()
+                                            {
+                                                let data = raw_data as *const f64;
 
-                                            println!("[DEBUG] UIA Caret geometry -> Left: {}, Top: {}, Height: {}", left, top, height);
-                                            return Some((left as i32, (top + height) as i32));
+                                                let left = *data.offset(0);
+                                                let top = *data.offset(1);
+                                                let height = *data.offset(3);
+
+                                                let _ = SafeArrayUnaccessData(safearray_ptr);
+                                                let _ = SafeArrayDestroy(safearray_ptr);
+
+                                                //println!("[DEBUG] UIA Caret geometry -> Left: {:.2}, Top: {:.2}, Height: {:.2}", left, top, height);
+                                                return Some((left as i32, (top + height) as i32));
+                                            }
+                                        } else {
+                                            //println!(
+                                            //    "[DEBUG] SAFEARRAY was empty (No visible caret)."
+                                            //);
                                         }
+                                        let _ = SafeArrayDestroy(safearray_ptr);
                                     }
                                 }
                             }
@@ -93,21 +104,27 @@ fn get_caret_position() -> Option<(i32, i32)> {
                     }
                 }
 
-                println!("[DEBUG] TextPattern2 not supported or failed. Checking Control Type...");
+                //println!(
+                //    "[DEBUG] TextPattern2 not supported or no caret. Checking Control Type..."
+                //);
                 if let Ok(control_type) = focused.CurrentControlType() {
-                    if control_type.0 == UIA_EditControlTypeId.0
-                        || control_type.0 == UIA_DocumentControlTypeId.0
-                    {
-                        println!("[DEBUG] Element IS a Document/Edit control! Falling back to Mouse Cursor.");
-                        let mut pt = POINT::default();
-                        if GetCursorPos(&mut pt).is_ok() {
-                            return Some((pt.x, pt.y));
+                    if control_type.0 == UIA_EditControlTypeId.0 {
+                        if let Ok(has_focus) = focused.CurrentHasKeyboardFocus() {
+                            if has_focus.as_bool() {
+                                //println!("[DEBUG] Element IS a focused Edit control! Falling back to Mouse Cursor.");
+                                let mut pt = POINT::default();
+                                if GetCursorPos(&mut pt).is_ok() {
+                                    return Some((pt.x, pt.y));
+                                }
+                            }
                         }
+                    } else {
+                        //println!("[DEBUG] Element is NOT a dedicated Edit control. Ignoring.");
                     }
                 }
             }
         }
-        println!("[DEBUG] No caret or text box found in either system.");
+        //println!("[DEBUG] No caret or text box found in either system.");
         None
     }
 }
@@ -202,20 +219,20 @@ pub fn run() {
 fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     if event.state == ShortcutState::Pressed {
         if shortcut.matches(Modifiers::ALT, Code::Period) {
-            println!("\n===================================");
-            println!("[DEBUG] Shortcut ALT+. Pressed!");
+            //println!("\n===================================");
+            //println!("[DEBUG] Shortcut ALT+. Pressed!");
 
             if let Some(window) = app.get_webview_window("main") {
                 if window.is_visible().unwrap_or(false) {
-                    println!("[DEBUG] Window is visible. Hiding it.");
+                    //println!("[DEBUG] Window is visible. Hiding it.");
                     let _ = window.hide();
                 } else {
-                    println!("[DEBUG] Window is hidden. Calculating position...");
+                    //println!("[DEBUG] Window is hidden. Calculating position...");
                     let state = app.state::<crate::models::AppState>();
                     let caret_pos = get_caret_position();
 
                     if let Some((x, y)) = caret_pos {
-                        println!("[DEBUG] Entering TEXTBOX Mode.");
+                        //println!("[DEBUG] Entering TEXTBOX Mode.");
                         state.is_centered_mode.store(false, Ordering::SeqCst);
 
                         let custom_size = if let Ok(lock) = state.custom_size.lock() {
@@ -233,10 +250,10 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                         let mut final_x = x;
                         let mut final_y = y + 20;
 
-                        println!(
-                            "[DEBUG] Searching for Monitor containing point ({}, {})",
-                            x, y
-                        );
+                        //println!(
+                        //    "[DEBUG] Searching for Monitor containing point ({}, {})",
+                        //    x, y
+                        //);
                         let mut target_monitor = None;
 
                         if let Ok(monitors) = window.available_monitors() {
@@ -248,7 +265,7 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                                     && y >= pos.y
                                     && y < pos.y + (size.height as i32)
                                 {
-                                    println!("[DEBUG] Caret matches Monitor at Pos {:?}", pos);
+                                    //println!("[DEBUG] Caret matches Monitor at Pos {:?}", pos);
                                     target_monitor = Some(m);
                                     break;
                                 }
@@ -256,7 +273,7 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                         }
 
                         if target_monitor.is_none() {
-                            println!("[DEBUG] Caret is outside all known monitors! Falling back to active window monitor.");
+                            //println!("[DEBUG] Caret is outside all known monitors! Falling back to active window monitor.");
                             target_monitor = window.current_monitor().unwrap_or(None);
                         }
 
@@ -265,23 +282,25 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                             let m_size = monitor.size();
                             let w_size = window.outer_size().unwrap_or(PhysicalSize::new(450, 500));
 
+                            // Clamp Right Edge
                             if final_x + (w_size.width as i32) > m_pos.x + (m_size.width as i32) {
-                                println!("[DEBUG] Clamping X to prevent right-screen bleed.");
+                                //println!("[DEBUG] Clamping X to prevent right-screen bleed.");
                                 final_x = m_pos.x + (m_size.width as i32) - (w_size.width as i32);
                             }
+                            // Clamp Bottom Edge
                             if final_y + (w_size.height as i32) > m_pos.y + (m_size.height as i32) {
-                                println!("[DEBUG] Clamping Y: Popping window ABOVE the caret.");
+                                //println!("[DEBUG] Clamping Y: Popping window ABOVE the caret.");
                                 final_y = y - (w_size.height as i32) - 10;
                             }
                         }
 
-                        println!(
-                            "[DEBUG] Final Physical Coordinates -> X: {}, Y: {}",
-                            final_x, final_y
-                        );
+                        //println!(
+                        //    "[DEBUG] Final Physical Coordinates -> X: {}, Y: {}",
+                        //    final_x, final_y
+                        //);
                         let _ = window.set_position(PhysicalPosition::new(final_x, final_y));
                     } else {
-                        println!("[DEBUG] Entering WORKSPACE Mode (Center).");
+                        //println!("[DEBUG] Entering WORKSPACE Mode (Center).");
                         state.is_centered_mode.store(true, Ordering::SeqCst);
 
                         let _ = window.set_size(LogicalSize::new(800, 600));
@@ -291,7 +310,7 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                     let _ = window.show();
                     let _ = window.set_focus();
                     let _ = window.emit("app_shown", ());
-                    println!("[DEBUG] Window shown successfully.");
+                    //println!("[DEBUG] Window shown successfully.");
                 }
             }
         }
