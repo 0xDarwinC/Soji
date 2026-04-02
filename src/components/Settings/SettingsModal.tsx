@@ -21,6 +21,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [updateStatus]);
+
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    useEffect(() => {
+        invoke<boolean>("is_admin").then(setIsAdmin).catch(console.error);
+    }, []);
+
+    const handleElevate = async () => {
+        try {
+            await invoke("restart_as_admin");
+        } catch (e) {
+            console.error("Failed to elevate:", e);
+        }
+    };
+
     const handleCheckUpdate = async () => {
         setUpdateStatus("Checking...");
         try {
@@ -215,6 +230,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                                 <div style={{ fontSize: '13px', marginTop: '5px', opacity: 0.7, textAlign: 'center' }}>
                                     {updateStatus}
                                 </div>
+                            )}
+                        </div>
+                    </div>
+                    {/* SYSTEM PERMISSIONS */}
+                    <div className="settings-section">
+                        <label className="settings-label">System Permissions</label>
+                        <div style={{
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px",
+                            border: isAdmin ? "1px solid rgba(74, 222, 128, 0.3)" : "1px solid rgba(255,255,255,0.1)"
+                        }}>
+                            <div style={{ flex: 1, paddingRight: "15px" }}>
+                                <div style={{ fontSize: "14px", fontWeight: "bold" }}>
+                                    Status: {isAdmin ? <span style={{ color: '#4ade80' }}>Admin</span> : <span style={{ color: '#f87171' }}>Standard</span>}
+                                </div>
+                                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "6px", lineHeight: "1.4" }}>
+                                    If the window isn't snapping to your cursor in certain apps (like ones running as admin), this setting will fix it.
+                                </div>
+                            </div>
+                            {!isAdmin && (
+                                <button onClick={handleElevate} className="settings-btn-primary" style={{ whiteSpace: "nowrap" }}>
+                                    Restart as Admin
+                                </button>
                             )}
                         </div>
                     </div>

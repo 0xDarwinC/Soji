@@ -209,6 +209,8 @@ pub fn run() {
             commands::rename_sticker,
             commands::move_sticker,
             commands::update_sticker,
+            commands::is_admin,
+            commands::restart_as_admin,
             library::cache_dropped_item,
             library::commit_sticker
         ])

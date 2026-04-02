@@ -1,13 +1,18 @@
-use crate::models::{Sticker, AppSettings, AppState};
-use crate::{database, clipboard, utils, library};
-use tauri::{AppHandle, Manager};
-use rusqlite::Connection;
+use crate::models::{AppSettings, AppState, Sticker};
+use crate::{clipboard, database, library, utils};
 use chrono::Utc;
+use rusqlite::Connection;
+use sha2::{Digest, Sha256};
+use std::fs;
+use std::os::windows::ffi::OsStrExt;
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
-use std::fs;
-use std::path::Path;
-use sha2::{Sha256, Digest};
+use tauri::{AppHandle, Manager};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use windows::core::PCWSTR;
+use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
 
 fn get_conn(app: &AppHandle) -> Connection {
     let state = app.state::<AppState>();
@@ -15,7 +20,50 @@ fn get_conn(app: &AppHandle) -> Connection {
 }
 
 #[tauri::command]
-pub async fn search_stickers(app: AppHandle, query: String, tab: String, limit: usize) -> Result<Vec<Sticker>, String> {
+pub fn is_admin() -> bool {
+    std::fs::File::open("\\\\.\\PHYSICALDRIVE0").is_ok()
+}
+
+#[tauri::command]
+pub fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_wide: Vec<u16> = exe_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let verb_wide: Vec<u16> = std::ffi::OsStr::new("runas")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    unsafe {
+        let result = ShellExecuteW(
+            None,
+            PCWSTR(verb_wide.as_ptr()),
+            PCWSTR(exe_wide.as_ptr()),
+            PCWSTR(std::ptr::null()),
+            PCWSTR(std::ptr::null()),
+            SW_SHOW,
+        );
+
+        if result.0 as isize > 32 {
+            let _ = app.global_shortcut().unregister_all();
+            app.exit(0);
+            Ok(())
+        } else {
+            Err("User declined the elevation prompt or it failed.".into())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn search_stickers(
+    app: AppHandle,
+    query: String,
+    tab: String,
+    limit: usize,
+) -> Result<Vec<Sticker>, String> {
     let conn = get_conn(&app);
     database::search_stickers(&conn, query, tab, limit).map_err(|e| e.to_string())
 }
@@ -61,7 +109,7 @@ pub fn delete_sticker(app: AppHandle, path: String) -> Result<(), String> {
 pub fn rename_sticker(app: AppHandle, path: String, new_name: String) -> Result<(), String> {
     let conn = get_conn(&app);
     let old_path_obj = Path::new(&path);
-    
+
     if !old_path_obj.exists() {
         return Err("File not found".to_string());
     }
@@ -70,7 +118,7 @@ pub fn rename_sticker(app: AppHandle, path: String, new_name: String) -> Result<
     let extension = old_path_obj.extension().ok_or("No extension")?;
     let new_filename = format!("{}.{}", new_name, extension.to_string_lossy());
     let new_path_obj = parent.join(new_filename);
-    
+
     if new_path_obj.exists() {
         return Err("A file with that name already exists".to_string());
     }
@@ -93,7 +141,7 @@ pub fn move_sticker(app: AppHandle, path: String, pack_name: String) -> Result<(
     }
 
     let file_name = old_path_obj.file_name().ok_or("Invalid filename")?;
-    
+
     let root_dir = utils::resolve_sticker_path(&app);
     if pack_name.contains("..") {
         return Err("Invalid pack name: Traversal characters (..) are not allowed".to_string());
@@ -102,19 +150,23 @@ pub fn move_sticker(app: AppHandle, path: String, pack_name: String) -> Result<(
     let target_pack_dir = match database::get_pack_path(&conn, &pack_name).unwrap_or(None) {
         Some(existing_sticker_path) => {
             let p = Path::new(&existing_sticker_path);
-            p.parent().unwrap_or(&root_dir.join(&pack_name)).to_path_buf()
-        },
-        None => root_dir.join(&pack_name)
+            p.parent()
+                .unwrap_or(&root_dir.join(&pack_name))
+                .to_path_buf()
+        }
+        None => root_dir.join(&pack_name),
     };
     if !target_pack_dir.starts_with(&root_dir) {
-        return Err("Security Violation: Cannot move sticker outside of library directory.".to_string());
+        return Err(
+            "Security Violation: Cannot move sticker outside of library directory.".to_string(),
+        );
     }
     if !target_pack_dir.exists() {
         fs::create_dir_all(&target_pack_dir).map_err(|e| e.to_string())?;
     }
 
     let new_path_obj = target_pack_dir.join(file_name);
-    
+
     if new_path_obj.exists() {
         return Err("A file with that name already exists in the destination".to_string());
     }
@@ -123,7 +175,7 @@ pub fn move_sticker(app: AppHandle, path: String, pack_name: String) -> Result<(
 
     let app_dir = utils::get_app_dir(&app);
     let thumb_dir = app_dir.join("thumbnails");
-    
+
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
     let old_hash = hex::encode(hasher.finalize());
@@ -144,25 +196,36 @@ pub fn move_sticker(app: AppHandle, path: String, pack_name: String) -> Result<(
     }
 
     let new_path_str = new_path_obj.to_string_lossy().to_string();
-    
-    database::move_sticker(&conn, &path, &new_path_str, &pack_name, &new_db_thumb_path_str)
-        .map_err(|e| e.to_string())?;
+
+    database::move_sticker(
+        &conn,
+        &path,
+        &new_path_str,
+        &pack_name,
+        &new_db_thumb_path_str,
+    )
+    .map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, new_pack: Option<String>) -> Result<(), String> {
+pub fn update_sticker(
+    app: AppHandle,
+    path: String,
+    new_name: Option<String>,
+    new_pack: Option<String>,
+) -> Result<(), String> {
     let conn = get_conn(&app);
     let current_path = Path::new(&path);
-    
+
     if !current_path.exists() {
         return Err("Sticker file not found on disk.".to_string());
     }
 
     let root_dir = utils::resolve_sticker_path(&app);
     let mut final_path_buf = current_path.to_path_buf();
-    
+
     if let Some(pack) = &new_pack {
         let target_pack_dir = root_dir.join(pack);
         if !target_pack_dir.exists() {
@@ -172,9 +235,19 @@ pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, ne
     }
 
     if let Some(name) = &new_name {
-        let ext = final_path_buf.extension().unwrap_or_default().to_string_lossy();
-        let safe_name: String = name.chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        let ext = final_path_buf
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let safe_name: String = name
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         final_path_buf.set_file_name(format!("{}.{}", safe_name, ext));
     }
@@ -190,15 +263,15 @@ pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, ne
 
         let mut query = "UPDATE stickers SET path = ?1".to_string();
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(final_path_str.clone())];
-        
+
         let mut param_idx = 2;
-        
+
         if let Some(name) = &new_name {
             query.push_str(&format!(", name = ?{}", param_idx));
             params.push(Box::new(name.clone()));
             param_idx += 1;
         }
-        
+
         if let Some(pack) = &new_pack {
             query.push_str(&format!(", pack = ?{}", param_idx));
             params.push(Box::new(pack.clone()));
@@ -207,17 +280,27 @@ pub fn update_sticker(app: AppHandle, path: String, new_name: Option<String>, ne
 
         query.push_str(&format!(" WHERE path = ?{}", param_idx));
         params.push(Box::new(path.clone()));
-        
+
         if let Some(name) = &new_name {
-            database::rename_sticker(&conn, &path, &final_path_str, name).map_err(|e| e.to_string())?;
+            database::rename_sticker(&conn, &path, &final_path_str, name)
+                .map_err(|e| e.to_string())?;
         } else {
-            let old_name: String = conn.query_row("SELECT name FROM stickers WHERE path = ?1", [&path], |r| r.get(0)).unwrap_or_default();
-            database::rename_sticker(&conn, &path, &final_path_str, &old_name).map_err(|e| e.to_string())?;
+            let old_name: String = conn
+                .query_row("SELECT name FROM stickers WHERE path = ?1", [&path], |r| {
+                    r.get(0)
+                })
+                .unwrap_or_default();
+            database::rename_sticker(&conn, &path, &final_path_str, &old_name)
+                .map_err(|e| e.to_string())?;
         }
 
         if let Some(pack) = &new_pack {
             // update pack column directly
-            conn.execute("UPDATE stickers SET pack = ?1 WHERE path = ?2", [pack, &final_path_str]).map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE stickers SET pack = ?1 WHERE path = ?2",
+                [pack, &final_path_str],
+            )
+            .map_err(|e| e.to_string())?;
         }
     }
 
@@ -270,8 +353,8 @@ pub fn wipe_data(app: AppHandle, data_type: String) -> bool {
                 let _ = fs::create_dir_all(&thumb_dir);
             }
             Ok(())
-        },
-        _ => Ok(())
+        }
+        _ => Ok(()),
     };
     res.is_ok()
 }
