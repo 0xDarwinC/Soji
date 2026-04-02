@@ -19,22 +19,21 @@ pub mod watcher;
 fn get_caret_position() -> Option<(i32, i32)> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::ClientToScreen;
-    use windows::Win32::UI::WindowsAndMessaging::{GetGUIThreadInfo, GUITHREADINFO};
+    use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetGUIThreadInfo, GUITHREADINFO};
 
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
-    // FIX 1: SafeArray functions live in the Ole module
     use windows::Win32::System::Ole::{
         SafeArrayAccessData, SafeArrayDestroy, SafeArrayUnaccessData,
     };
-    // FIX 2: Imported IUIAutomationTextRange
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, IUIAutomationTextPattern2, IUIAutomationTextRange,
-        UIA_TextPattern2Id,
+        UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_TextPattern2Id,
     };
 
     unsafe {
+        println!("\n--- [DEBUG] STARTING CARET SEARCH ---");
         let mut gui_info = GUITHREADINFO {
             cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
             ..Default::default()
@@ -46,9 +45,14 @@ fn get_caret_position() -> Option<(i32, i32)> {
                 y: gui_info.rcCaret.bottom,
             };
             let _ = ClientToScreen(gui_info.hwndCaret, &mut pt);
+            println!(
+                "[DEBUG] Win32 Caret found at Physical X:{}, Y:{}",
+                pt.x, pt.y
+            );
             return Some((pt.x, pt.y));
         }
 
+        println!("[DEBUG] Win32 failed. Initializing UI Automation (COM)...");
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
         if let Ok(automation) =
@@ -72,16 +76,15 @@ fn get_caret_position() -> Option<(i32, i32)> {
                                         if SafeArrayAccessData(safearray_ptr, &mut raw_data).is_ok()
                                         {
                                             let data = raw_data as *const f64;
-
                                             let left = *data.offset(0);
                                             let top = *data.offset(1);
-                                            let _width = *data.offset(2);
                                             let height = *data.offset(3);
 
                                             let _ = SafeArrayUnaccessData(safearray_ptr);
                                             let _ = SafeArrayDestroy(safearray_ptr);
 
-                                            return Some((left as i32, (top + height) as i32 + 10));
+                                            println!("[DEBUG] UIA Caret geometry -> Left: {}, Top: {}, Height: {}", left, top, height);
+                                            return Some((left as i32, (top + height) as i32));
                                         }
                                     }
                                 }
@@ -89,8 +92,22 @@ fn get_caret_position() -> Option<(i32, i32)> {
                         }
                     }
                 }
+
+                println!("[DEBUG] TextPattern2 not supported or failed. Checking Control Type...");
+                if let Ok(control_type) = focused.CurrentControlType() {
+                    if control_type.0 == UIA_EditControlTypeId.0
+                        || control_type.0 == UIA_DocumentControlTypeId.0
+                    {
+                        println!("[DEBUG] Element IS a Document/Edit control! Falling back to Mouse Cursor.");
+                        let mut pt = POINT::default();
+                        if GetCursorPos(&mut pt).is_ok() {
+                            return Some((pt.x, pt.y));
+                        }
+                    }
+                }
             }
         }
+        println!("[DEBUG] No caret or text box found in either system.");
         None
     }
 }
@@ -151,7 +168,9 @@ pub fn run() {
                 if let tauri::WindowEvent::Resized(size) = event {
                     let state = resize_handle.state::<AppState>();
                     if !state.is_centered_mode.load(Ordering::SeqCst) {
-                        *state.custom_size.lock().unwrap() = Some(*size);
+                        if let Ok(mut lock) = state.custom_size.lock() {
+                            *lock = Some(*size);
+                        }
                     }
                 }
             });
@@ -183,27 +202,86 @@ pub fn run() {
 fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     if event.state == ShortcutState::Pressed {
         if shortcut.matches(Modifiers::ALT, Code::Period) {
+            println!("\n===================================");
+            println!("[DEBUG] Shortcut ALT+. Pressed!");
+
             if let Some(window) = app.get_webview_window("main") {
                 if window.is_visible().unwrap_or(false) {
+                    println!("[DEBUG] Window is visible. Hiding it.");
                     let _ = window.hide();
                 } else {
+                    println!("[DEBUG] Window is hidden. Calculating position...");
                     let state = app.state::<crate::models::AppState>();
-
                     let caret_pos = get_caret_position();
 
                     if let Some((x, y)) = caret_pos {
-                        // textbox mode
+                        println!("[DEBUG] Entering TEXTBOX Mode.");
                         state.is_centered_mode.store(false, Ordering::SeqCst);
 
-                        if let Some(size) = *state.custom_size.lock().unwrap() {
+                        let custom_size = if let Ok(lock) = state.custom_size.lock() {
+                            *lock
+                        } else {
+                            None
+                        };
+
+                        if let Some(size) = custom_size {
                             let _ = window.set_size(size);
                         } else {
                             let _ = window.set_size(PhysicalSize::new(450, 500));
                         }
 
-                        let _ = window.set_position(PhysicalPosition::new(x, y));
+                        let mut final_x = x;
+                        let mut final_y = y + 20;
+
+                        println!(
+                            "[DEBUG] Searching for Monitor containing point ({}, {})",
+                            x, y
+                        );
+                        let mut target_monitor = None;
+
+                        if let Ok(monitors) = window.available_monitors() {
+                            for m in monitors {
+                                let pos = m.position();
+                                let size = m.size();
+                                if x >= pos.x
+                                    && x < pos.x + (size.width as i32)
+                                    && y >= pos.y
+                                    && y < pos.y + (size.height as i32)
+                                {
+                                    println!("[DEBUG] Caret matches Monitor at Pos {:?}", pos);
+                                    target_monitor = Some(m);
+                                    break;
+                                }
+                            }
+                        }
+
+                        if target_monitor.is_none() {
+                            println!("[DEBUG] Caret is outside all known monitors! Falling back to active window monitor.");
+                            target_monitor = window.current_monitor().unwrap_or(None);
+                        }
+
+                        if let Some(monitor) = target_monitor {
+                            let m_pos = monitor.position();
+                            let m_size = monitor.size();
+                            let w_size = window.outer_size().unwrap_or(PhysicalSize::new(450, 500));
+
+                            if final_x + (w_size.width as i32) > m_pos.x + (m_size.width as i32) {
+                                println!("[DEBUG] Clamping X to prevent right-screen bleed.");
+                                final_x = m_pos.x + (m_size.width as i32) - (w_size.width as i32);
+                            }
+                            if final_y + (w_size.height as i32) > m_pos.y + (m_size.height as i32) {
+                                println!("[DEBUG] Clamping Y: Popping window ABOVE the caret.");
+                                final_y = y - (w_size.height as i32) - 10;
+                            }
+                        }
+
+                        println!(
+                            "[DEBUG] Final Physical Coordinates -> X: {}, Y: {}",
+                            final_x, final_y
+                        );
+                        let _ = window.set_position(PhysicalPosition::new(final_x, final_y));
                     } else {
-                        // default mode
+                        println!("[DEBUG] Entering WORKSPACE Mode (Center).");
                         state.is_centered_mode.store(true, Ordering::SeqCst);
 
                         let _ = window.set_size(LogicalSize::new(800, 600));
@@ -213,6 +291,7 @@ fn handle_shortcut(app: &tauri::AppHandle, shortcut: &Shortcut, event: ShortcutE
                     let _ = window.show();
                     let _ = window.set_focus();
                     let _ = window.emit("app_shown", ());
+                    println!("[DEBUG] Window shown successfully.");
                 }
             }
         }
