@@ -35,8 +35,8 @@
     - [x] Only render what you need. But the objects need to exist for search
     - [x] clean up the repo
     - [ ] add documentation
-- [ ] make window be an offset from cursor like emoji keyboard
-    - [ ] Perhaps different behavior if cursor not in a textbox.
+- [x] make window be an offset from cursor like emoji keyboard
+    - [x] Perhaps different behavior if cursor not in a textbox.
 - [ ] Pretext integration for efficient layout calcs
 - [ ] authenticode certificate
 - [ ] help button 
@@ -78,7 +78,7 @@ Test:
 - [ ]  drag and drop
     - [ ] large files >25mb
     - [ ] file types (unsupported vs supp)
-
+- [ ] app interactions with multi monitor setup
 
 
 Post-Release Features:
