@@ -1,9 +1,11 @@
 {
   "name": "soji",
   "private": true,
-  "version": "0.5.3",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/download_ffmpeg.mjs",
+    "prebuild": "node scripts/download_ffmpeg.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

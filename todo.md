@@ -30,7 +30,7 @@
     - [x] change pack while keeping its history
 - [x] hovering sticker buttons for feedback, perhaps sfx
 - [x] make window resizable
-- [x] optimize and clean up the repository for performance. Needs to support a large amount of photos.
+- [x] optimize and cleaan up the repository for performance. Needs to support a large amount of photos.
     - [x] Make async where it makes sense, dont have thread pool exhaustion
     - [x] Only render what you need. But the objects need to exist for search
     - [x] clean up the repo
@@ -73,6 +73,7 @@ Bugs:
     - [ ] instead of just fuzzy, match any keys
 - [ ] remove ability to highlight text within app
 - [ ] when drag/drop or ctrlv a new image to open editor, window doesnt resize to default
+- [ ] when renaming a file outside of the app, the thumbnail appears as a missing image. it still works, but the preview does not update. This is because the preview is cached. We should update the preview when the file is renamed.
  
 
 Test:

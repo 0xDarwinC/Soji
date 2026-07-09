@@ -89,18 +89,28 @@ pub fn copy_sticker_to_clipboard(path: &str, thumb_dir: &Path) -> Result<(), Str
         false
     };
 
+    let hash = {
+        let mut hasher = sha2::Sha256::new();
+        use sha2::Digest;
+        hasher.update(path.as_bytes());
+        hex::encode(hasher.finalize())
+    };
+
     if is_animated {
         let _ = (|| -> Result<(), String> {
+            let mut load_path = path.to_string();
+            if extension == "gif" {
+                let thumb_path_gif = thumb_dir.join(format!("{}.gif", hash));
+                if thumb_path_gif.exists() {
+                    load_path = thumb_path_gif.to_string_lossy().to_string();
+                }
+            }
             let _clip = WinClipboard::new_attempts(10).map_err(|e| e.to_string())?;
-            let files = vec![path.to_string()];
+            let files = vec![load_path];
             formats::FileList.write_clipboard(&files).map_err(|e| e.to_string())?;
             Ok(())
         })().map_err(|e| format!("Clipboard error: {}", e))?;
     } else {
-        let mut hasher = sha2::Sha256::new();
-        use sha2::Digest;
-        hasher.update(path.as_bytes());
-        let hash = hex::encode(hasher.finalize());
         let thumb_path = thumb_dir.join(format!("{}.webp", hash));
 
         let load_path = if thumb_path.exists() { thumb_path } else { path_buf };

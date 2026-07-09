@@ -22,6 +22,9 @@ use reqwest::blocking::Client;
 use url::Url;
 use infer;
 use crate::database;
+use std::process::Command;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 //user specified in the future? 25mb for now...
 const MAX_STICKER_SIZE: u64 = 25*1024*1024;
@@ -59,7 +62,21 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
                     let path_str = path.to_string_lossy().to_string();
                     found_paths.insert(path_str.clone());
                     if !existing_paths.contains(&path_str) {
-                        candidates.push(path.to_path_buf());
+                        candidates.push((path.to_path_buf(), true));
+                    } else {
+                        let mut hasher = Sha256::new();
+                        hasher.update(path_str.as_bytes());
+                        let hash = hex::encode(hasher.finalize());
+                        let dest_ext = if ext_str == "gif" { "gif" } else { "webp" };
+                        let dest_path = thumb_dir.join(format!("{}.{}", hash, dest_ext));
+                        
+                        if !dest_path.exists() {
+                            let old_webp = thumb_dir.join(format!("{}.webp", hash));
+                            if old_webp.exists() && ext_str == "gif" {
+                                let _ = std::fs::remove_file(old_webp);
+                            }
+                            candidates.push((path.to_path_buf(), false));
+                        }
                     }
                 }
             }
@@ -120,9 +137,9 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
     });
 
     // process in parallel
-    let new_stickers: Vec<Option<(String, String, String, String, String)>> = candidates
+    let new_stickers: Vec<Option<(String, String, String, String, String, bool)>> = candidates
         .par_iter()
-        .map(|path| {
+        .map(|(path, is_new)| {
             let path_str = path.to_string_lossy().to_string();
             let mut name = path.file_stem().unwrap().to_string_lossy().to_string();
             if name.to_lowercase().ends_with(".heic") { name = name[..name.len()-5].to_string(); }
@@ -134,19 +151,26 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
             let thumb_path = generate_thumbnail(path, &thumb_dir);
             processed_count.fetch_add(1, Ordering::Relaxed);
 
-            Some((path_str, name, pack, ext_str, thumb_path.to_string_lossy().to_string()))
+            Some((path_str, name, pack, ext_str, thumb_path.to_string_lossy().to_string(), *is_new))
         })
         .collect();
 
     // batch insert
     {
-        let mut stmt = tx.prepare(
+        let mut insert_stmt = tx.prepare(
             "INSERT INTO stickers (path, name, pack, format, thumbnail_path) VALUES (?1, ?2, ?3, ?4, ?5)"
+        ).unwrap();
+        let mut update_stmt = tx.prepare(
+            "UPDATE stickers SET thumbnail_path = ?1 WHERE path = ?2"
         ).unwrap();
 
         for item in new_stickers {
-            if let Some((path, name, pack, ext, thumb)) = item {
-                let _ = stmt.execute((&path, &name, &pack, &ext, &thumb));
+            if let Some((path, name, pack, ext, thumb, is_new)) = item {
+                if is_new {
+                    let _ = insert_stmt.execute((&path, &name, &pack, &ext, &thumb));
+                } else {
+                    let _ = update_stmt.execute((&thumb, &path));
+                }
             }
         }
     }
@@ -166,9 +190,61 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
     let mut hasher = Sha256::new();
     hasher.update(src_path.to_string_lossy().as_bytes());
     let hash = hex::encode(hasher.finalize());
-    let dest_path = thumb_dir.join(format!("{}.webp", hash));
+    let is_gif = src_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase() == "gif";
+    let dest_ext = if is_gif { "gif" } else { "webp" };
+    let dest_path = thumb_dir.join(format!("{}.{}", hash, dest_ext));
 
     if dest_path.exists() { return dest_path; }
+
+    if is_gif {
+        if let Ok((width, height)) = image::image_dimensions(src_path) {
+            let (target_width, target_height) = if width <= 160 && height <= 160 {
+                (width, height)
+            } else if width == height {
+                (160, 160)
+            } else if width > height {
+                let w = (width as u32 * 160) / height as u32;
+                (w, 160)
+            } else {
+                let h = (height as u32 * 160) / width as u32;
+                (160, h)
+            };
+
+            if target_width == width && target_height == height {
+                let _ = fs::copy(src_path, &dest_path);
+                return dest_path;
+            }
+
+            let current_exe = std::env::current_exe().unwrap();
+            let current_dir = current_exe.parent().unwrap();
+            let mut ffmpeg_path = current_dir.join("ffmpeg-x86_64-pc-windows-msvc.exe");
+            if !ffmpeg_path.exists() {
+                ffmpeg_path = current_dir.join("../../bin/ffmpeg-x86_64-pc-windows-msvc.exe");
+            }
+            if !ffmpeg_path.exists() {
+                ffmpeg_path = PathBuf::from("ffmpeg");
+            }
+
+            #[cfg(target_os = "windows")]
+            let mut cmd = Command::new(&ffmpeg_path);
+            
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(0x08000000);
+            
+            #[cfg(not(target_os = "windows"))]
+            let mut cmd = Command::new(&ffmpeg_path);
+
+            let _ = cmd.args([
+                    "-i", src_path.to_str().unwrap(),
+                    "-vf", &format!("scale={}:{}", target_width, target_height),
+                    "-threads", "1",
+                    "-y", dest_path.to_str().unwrap()
+                ])
+                .output();
+                
+            return dest_path;
+        }
+    }
 
     if let Ok(file) = std::fs::File::open(src_path) {
         let mut reader = std::io::BufReader::new(file);
