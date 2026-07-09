@@ -46,6 +46,10 @@
     - [ ] once we know which ones are, the "thumbnails" we generate for them should be gifs
     - [ ] to do the above, we should use ffmpeg.
     - [ ] the purpose is because discord does not render animated webp as animated
+- [ ] videos -> gif
+    - [ ] the idea is to add video file support
+    - [ ] if video length less than 10 seconds, or the file size is small, etc use some metric
+    - [ ] if so, convert to gif, using our ffmpeg sidecar.
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
@@ -72,13 +76,12 @@
     - [ ] youtube video product demo
 
 Bugs:
-- [ ] Update dialog text is not correct
+- [x] Update dialog text is not correct
 - [ ] release yml optimizations not working
-- [ ] fuzzy search needs to be improved
-    - [ ] instead of just fuzzy, match any keys
-- [ ] remove ability to highlight text within app
-- [ ] when drag/drop or ctrlv a new image to open editor, window doesnt resize to default
-- [ ] when renaming a file outside of the app, the thumbnail appears as a missing image. it still works, but the preview does not update. This is because the preview is cached. We should update the preview when the file is renamed.
+- [x] remove ability to highlight text within app
+- [x] when drag/drop or ctrlv a new image to open editor, window doesnt resize to default
+- [x] when renaming a file outside of the app, the thumbnail appears as a missing image. it still works, but the preview does not update. This is because the preview is cached. We should update the preview when the file is renamed.
+- [x] able to highlight text in the app, should be disabled.
  
 
 Test:
