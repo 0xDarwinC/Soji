@@ -42,37 +42,7 @@ pub fn restore(backup: ClipboardBackup) {
     }
 }
 
-// reads 21 bytes to find vp8x flag
-fn is_animated_webp(path: &Path) -> bool {
-    use std::fs::File;
-    use std::io::Read;
-    
-    let mut file = match File::open(path) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    
-    let mut buffer = [0; 256];
-    let bytes_read = file.read(&mut buffer).unwrap_or(0);
-    
-    if bytes_read < 21 { 
-        return false; 
-    }
-    
-    if &buffer[0..4] != b"RIFF" || &buffer[8..12] != b"WEBP" {
-        return false;
-    }
-    
-    if &buffer[12..16] == b"VP8X" {
-        let has_animation_bit = (buffer[20] & 0x02) != 0;
-        
-        if has_animation_bit {
-            return buffer[..bytes_read].windows(4).any(|window| window == b"ANIM");
-        }
-    }
-    
-    false
-}
+
 
 pub fn copy_sticker_to_clipboard(path: &str, thumb_dir: &Path) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
@@ -84,7 +54,7 @@ pub fn copy_sticker_to_clipboard(path: &str, thumb_dir: &Path) -> Result<(), Str
     if extension == "gif"{
         true
     } else if extension == "webp"{
-        is_animated_webp(&path_buf)
+        crate::utils::is_animated_webp(&path_buf)
     } else {
         false
     };
@@ -99,11 +69,9 @@ pub fn copy_sticker_to_clipboard(path: &str, thumb_dir: &Path) -> Result<(), Str
     if is_animated {
         let _ = (|| -> Result<(), String> {
             let mut load_path = path.to_string();
-            if extension == "gif" {
-                let thumb_path_gif = thumb_dir.join(format!("{}.gif", hash));
-                if thumb_path_gif.exists() {
-                    load_path = thumb_path_gif.to_string_lossy().to_string();
-                }
+            let thumb_path_gif = thumb_dir.join(format!("{}.gif", hash));
+            if thumb_path_gif.exists() {
+                load_path = thumb_path_gif.to_string_lossy().to_string();
             }
             let _clip = WinClipboard::new_attempts(10).map_err(|e| e.to_string())?;
             let files = vec![load_path];

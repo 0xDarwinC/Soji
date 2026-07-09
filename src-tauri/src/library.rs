@@ -67,13 +67,23 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
                         let mut hasher = Sha256::new();
                         hasher.update(path_str.as_bytes());
                         let hash = hex::encode(hasher.finalize());
-                        let dest_ext = if ext_str == "gif" { "gif" } else { "webp" };
+                        
+                        let is_animated = if ext_str == "gif" {
+                            true
+                        } else if ext_str == "webp" {
+                            crate::utils::is_animated_webp(&path)
+                        } else {
+                            false
+                        };
+                        
+                        let dest_ext = if is_animated { "gif" } else { "webp" };
                         let dest_path = thumb_dir.join(format!("{}.{}", hash, dest_ext));
                         
                         if !dest_path.exists() {
-                            let old_webp = thumb_dir.join(format!("{}.webp", hash));
-                            if old_webp.exists() && ext_str == "gif" {
-                                let _ = std::fs::remove_file(old_webp);
+                            let wrong_ext = if is_animated { "webp" } else { "gif" };
+                            let wrong_thumb = thumb_dir.join(format!("{}.{}", hash, wrong_ext));
+                            if wrong_thumb.exists() {
+                                let _ = std::fs::remove_file(wrong_thumb);
                             }
                             candidates.push((path.to_path_buf(), false));
                         }
@@ -190,14 +200,26 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
     let mut hasher = Sha256::new();
     hasher.update(src_path.to_string_lossy().as_bytes());
     let hash = hex::encode(hasher.finalize());
-    let is_gif = src_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase() == "gif";
-    let dest_ext = if is_gif { "gif" } else { "webp" };
+    let ext = src_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    
+    let is_animated = if ext == "gif" {
+        true
+    } else if ext == "webp" {
+        crate::utils::is_animated_webp(src_path)
+    } else {
+        false
+    };
+
+    let dest_ext = if is_animated { "gif" } else { "webp" };
     let dest_path = thumb_dir.join(format!("{}.{}", hash, dest_ext));
 
     if dest_path.exists() { return dest_path; }
 
-    if is_gif {
-        if let Ok((width, height)) = image::image_dimensions(src_path) {
+    if is_animated {
+        let dim_result = image::ImageReader::open(src_path)
+            .and_then(|r| r.with_guessed_format()?.into_dimensions().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)));
+        
+        if let Ok((width, height)) = dim_result {
             let (target_width, target_height) = if width <= 160 && height <= 160 {
                 (width, height)
             } else if width == height {
@@ -210,7 +232,7 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
                 (160, h)
             };
 
-            if target_width == width && target_height == height {
+            if target_width == width && target_height == height && ext == dest_ext {
                 let _ = fs::copy(src_path, &dest_path);
                 return dest_path;
             }
@@ -236,7 +258,7 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
 
             let _ = cmd.args([
                     "-i", src_path.to_str().unwrap(),
-                    "-vf", &format!("scale={}:{}", target_width, target_height),
+                    "-vf", &format!("scale={}:{},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", target_width, target_height),
                     "-threads", "1",
                     "-y", dest_path.to_str().unwrap()
                 ])
@@ -246,9 +268,12 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
         }
     }
 
-    if let Ok(file) = std::fs::File::open(src_path) {
-        let mut reader = std::io::BufReader::new(file);
-        if let Ok(img) = image::load(&mut reader, image::ImageFormat::from_path(src_path).unwrap_or(image::ImageFormat::Png)) {
+    let open_result = image::ImageReader::open(src_path);
+
+    if let Ok(reader) = open_result {
+        let load_result = reader.with_guessed_format().unwrap_or_else(|_| image::ImageReader::open(src_path).unwrap()).decode();
+        
+        if let Ok(img) = load_result {
             let width = img.width();
             let height = img.height();
             

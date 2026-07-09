@@ -41,11 +41,11 @@
 - [x] gif resizing
   - [x] needs to resize with a similar intuition of how we resize images in terms of dimensions
   - [x] need to use rust-ffmpeg or some other derivative
-- [ ] webp issues
-    - [ ] webp can sometimes be animated. we need to know when they are
-    - [ ] once we know which ones are, the "thumbnails" we generate for them should be gifs
-    - [ ] to do the above, we should use ffmpeg.
-    - [ ] the purpose is because discord does not render animated webp as animated
+- [x] webp issues
+    - [x] webp can sometimes be animated. we need to know when they are
+    - [x] once we know which ones are, the "thumbnails" we generate for them should be gifs
+    - [x] to do the above, we should use ffmpeg.
+    - [x] the purpose is because discord does not render animated webp as animated
 - [ ] videos -> gif
     - [ ] the idea is to add video file support
     - [ ] if video length less than 10 seconds, or the file size is small, etc use some metric
@@ -101,10 +101,11 @@ Post-Release Features:
     - [ ] see pjsk sticker editor for details
     - [ ] move text x and y axis, rotate full 360
     - [ ] additional font options?
-- [ ] animated formats conversion using vid2gif (ffmpeg wrapper) or other crates
-    - [ ] if animated webp, then gif
-    - [ ] if webm, then gif
-    - [ ] other formats as necessary
+- [ ] support more special animated formats:
+    - [ ] APNG (.apng, .png): Animated Portable Network Graphics. Standard PNGs that contain hidden animation chunks.
+    - [ ] AVIF (.avif): AV1 Image File Format. Can store image sequences for animation.
+    - [ ] HEIF / HEIC (.heif, .heic): High Efficiency Image File Format (commonly used by Apple). Supports image sequences and animations.
+    - [ ] JXL (.jxl): JPEG XL. A newer format that supports both static images and animations natively.
 - [ ] Masonry Layout option
 - [ ] Pretext integration for efficient layout calcs
 

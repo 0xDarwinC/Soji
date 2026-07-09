@@ -55,3 +55,55 @@ pub fn apply_theme_to_window(window: &tauri::WebviewWindow, theme: &str) {
         let _ = apply_acrylic(window, Some((0, 0, 0, 10))); 
     }
 }
+
+pub fn is_animated_webp(path: &Path) -> bool {
+    use std::fs::File;
+    use std::io::{Read, Seek, SeekFrom};
+    
+    let mut file = match File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    
+    let mut header = [0u8; 12];
+    if file.read_exact(&mut header).is_err() { return false; }
+    
+    // Check if it's actually a PNG (APNG) mislabeled as WEBP
+    if &header[0..8] == b"\x89PNG\r\n\x1a\n" {
+        // Read the next ~256 bytes to look for the "acTL" animation control chunk
+        let mut png_buffer = [0u8; 256];
+        let bytes_read = file.read(&mut png_buffer).unwrap_or(0);
+        return png_buffer[..bytes_read].windows(4).any(|w| w == b"acTL");
+    }
+    
+    if &header[0..4] != b"RIFF" || &header[8..12] != b"WEBP" { 
+        return false; 
+    }
+    
+    loop {
+        let mut chunk_header = [0u8; 8];
+        if file.read_exact(&mut chunk_header).is_err() { break; }
+        
+        if &chunk_header[0..4] == b"VP8X" {
+            let mut vp8x_data = [0u8; 10];
+            if file.read_exact(&mut vp8x_data).is_ok() {
+                let has_animation_bit = (vp8x_data[0] & 0x02) != 0;
+                if has_animation_bit {
+                    return true;
+                }
+            }
+            let _ = file.seek(SeekFrom::Current(-10));
+        }
+
+        if &chunk_header[0..4] == b"ANIM" {
+            return true;
+        }
+        
+        let chunk_size = u32::from_le_bytes(chunk_header[4..8].try_into().unwrap()) as u64;
+        let padded_size = chunk_size + (chunk_size & 1);
+        
+        if file.seek(SeekFrom::Current(padded_size as i64)).is_err() { break; }
+    }
+    
+    false
+}
