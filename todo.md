@@ -38,7 +38,9 @@
 - [x] make window be an offset from cursor like emoji keyboard
     - [x] Perhaps different behavior if cursor not in a textbox.
     - [ ] If user opens settings, or any edit interaction, switches to workspace mode
-- [ ] Pretext integration for efficient layout calcs
+- [ ] gif resizing
+  - [ ] needs to resize with a similar intuition of how we resize images in terms of dimensions
+  - [ ] need to use rust-ffmpeg or some other derivative
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
@@ -70,6 +72,8 @@ Bugs:
 - [ ] fuzzy search needs to be improved
     - [ ] instead of just fuzzy, match any keys
 - [ ] remove ability to highlight text within app
+- [ ] when drag/drop or ctrlv a new image to open editor, window doesnt resize to default
+ 
 
 Test:
 - [ ] Move method destination outside of user dir subtree
@@ -93,10 +97,9 @@ Post-Release Features:
     - [ ] if webm, then gif
     - [ ] other formats as necessary
 - [ ] Masonry Layout option
+- [ ] Pretext integration for efficient layout calcs
 
 
 
 Potential features:
-- [ ] Resize gif
-    - Not feasible until I find a smart implementation. FIR resizing each frame of a gif can become computationally expensive really fast.
 - [ ] gpu acceleration for image indexing?
