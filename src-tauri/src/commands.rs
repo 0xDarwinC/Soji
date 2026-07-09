@@ -6,9 +6,10 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, LogicalSize, Manager};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use windows::core::PCWSTR;
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -261,17 +262,35 @@ pub fn update_sticker(
 
         fs::rename(&path, &final_path_buf).map_err(|e| format!("FS Error: {}", e))?;
 
-        let mut query = "UPDATE stickers SET path = ?1".to_string();
-        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(final_path_str.clone())];
+        // Also rename the thumbnail and update DB!
+        let old_hash = format!("{:x}", Sha256::digest(path.as_bytes()));
+        let new_hash = format!("{:x}", Sha256::digest(final_path_str.as_bytes()));
+        let thumb_dir = utils::get_app_dir(&app).join("thumbnails");
 
-        let mut param_idx = 2;
+        let mut old_thumb_path = thumb_dir.join(format!("{}.webp", old_hash));
+        let mut new_thumb_path = thumb_dir.join(format!("{}.webp", new_hash));
+        
+        if !old_thumb_path.exists() {
+            old_thumb_path = thumb_dir.join(format!("{}.gif", old_hash));
+            new_thumb_path = thumb_dir.join(format!("{}.gif", new_hash));
+        }
+
+        let new_db_thumb_path_str = if old_thumb_path.exists() {
+            fs::rename(&old_thumb_path, &new_thumb_path).map_err(|e| e.to_string())?;
+            new_thumb_path.to_string_lossy().to_string()
+        } else {
+            final_path_str.clone() // Fallback if no thumb
+        };
+
+        let mut query = "UPDATE stickers SET path = ?1, thumbnail_path = ?2".to_string();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(final_path_str.clone()), Box::new(new_db_thumb_path_str.clone())];
+        let mut param_idx = 3;
 
         if let Some(name) = &new_name {
             query.push_str(&format!(", name = ?{}", param_idx));
             params.push(Box::new(name.clone()));
             param_idx += 1;
         }
-
         if let Some(pack) = &new_pack {
             query.push_str(&format!(", pack = ?{}", param_idx));
             params.push(Box::new(pack.clone()));
@@ -281,27 +300,10 @@ pub fn update_sticker(
         query.push_str(&format!(" WHERE path = ?{}", param_idx));
         params.push(Box::new(path.clone()));
 
-        if let Some(name) = &new_name {
-            database::rename_sticker(&conn, &path, &final_path_str, name)
-                .map_err(|e| e.to_string())?;
-        } else {
-            let old_name: String = conn
-                .query_row("SELECT name FROM stickers WHERE path = ?1", [&path], |r| {
-                    r.get(0)
-                })
-                .unwrap_or_default();
-            database::rename_sticker(&conn, &path, &final_path_str, &old_name)
-                .map_err(|e| e.to_string())?;
-        }
-
-        if let Some(pack) = &new_pack {
-            // update pack column directly
-            conn.execute(
-                "UPDATE stickers SET pack = ?1 WHERE path = ?2",
-                [pack, &final_path_str],
-            )
-            .map_err(|e| e.to_string())?;
-        }
+        // Since rusqlite::ToSql needs references for execute, let's just do it directly.
+        // Convert to a slice of &dyn ToSql
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+        conn.execute(&query, rusqlite::params_from_iter(params_refs)).map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -375,4 +377,14 @@ pub async fn refresh_library(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         library::index_library(&handle, db_path, thumb_dir);
     });
+}
+
+#[tauri::command]
+pub fn set_window_workspace(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let state = app.state::<crate::models::AppState>();
+        state.is_centered_mode.store(true, Ordering::SeqCst);
+        let _ = window.set_size(LogicalSize::new(800, 600));
+        let _ = window.center();
+    }
 }

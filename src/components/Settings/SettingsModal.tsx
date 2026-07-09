@@ -45,7 +45,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSaveSe
                 const yes = await ask(`Update to ${update.version} is available.\n\n${update.body}`, {
                     title: 'Update Available',
                     kind: 'info',
-                    okLabel: 'Update & Restart'
+                    okLabel: 'Update & Restart',
+                    cancelLabel: 'Cancel'
                 });
                 if (yes) {
                     setUpdateStatus("Downloading...");

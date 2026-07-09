@@ -48,7 +48,10 @@ export function useSettings() {
         saveSettings({ ...settings, theme });
     };
 
-    const toggleSettings = () => setShowSettings(!showSettings);
+    const toggleSettings = () => {
+        invoke('set_window_workspace');
+        setShowSettings(!showSettings);
+    };
 
     return {
         settings,

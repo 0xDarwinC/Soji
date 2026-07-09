@@ -211,6 +211,7 @@ pub fn run() {
             commands::update_sticker,
             commands::is_admin,
             commands::restart_as_admin,
+            commands::set_window_workspace,
             library::cache_dropped_item,
             library::commit_sticker
         ])

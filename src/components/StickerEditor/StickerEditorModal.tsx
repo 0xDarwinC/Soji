@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import './StickerEditorModal.css';
 
 export type EditorMode = 'create' | 'edit';
@@ -68,8 +67,8 @@ export const StickerEditorModal: React.FC<Props> = ({ data, packs, onClose, onSu
     };
 
     return (
-        <div className="editor-overlay" onClick={handleOverlayClick} onContextMenu={e => e.preventDefault()}>
-            <div className="editor-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="editor-overlay" onMouseDown={handleOverlayClick} onContextMenu={e => e.preventDefault()}>
+            <div className="editor-modal" onMouseDown={(e) => e.stopPropagation()}>
                 <h3 style={{ margin: 0, color: 'white' }}>
                     {data.mode === 'create' ? 'Add New Sticker' : 'Edit Sticker'}
                 </h3>

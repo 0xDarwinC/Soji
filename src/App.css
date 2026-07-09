@@ -14,6 +14,11 @@ body {
   height: 100%;
   overflow: hidden;
   color: #ffffff;
+  user-select: none;
+}
+
+input, textarea {
+  user-select: text;
 }
 
 #root {

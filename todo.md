@@ -38,9 +38,14 @@
 - [x] make window be an offset from cursor like emoji keyboard
     - [x] Perhaps different behavior if cursor not in a textbox.
     - [ ] If user opens settings, or any edit interaction, switches to workspace mode
-- [ ] gif resizing
-  - [ ] needs to resize with a similar intuition of how we resize images in terms of dimensions
-  - [ ] need to use rust-ffmpeg or some other derivative
+- [x] gif resizing
+  - [x] needs to resize with a similar intuition of how we resize images in terms of dimensions
+  - [x] need to use rust-ffmpeg or some other derivative
+- [ ] webp issues
+    - [ ] webp can sometimes be animated. we need to know when they are
+    - [ ] once we know which ones are, the "thumbnails" we generate for them should be gifs
+    - [ ] to do the above, we should use ffmpeg.
+    - [ ] the purpose is because discord does not render animated webp as animated
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button

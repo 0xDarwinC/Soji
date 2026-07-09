@@ -35,9 +35,6 @@ function App() {
         appStateRef.current = { query, activeTab, handleSearch, handleTabClick, reloadCurrentView };
     }, [query, activeTab, handleSearch, handleTabClick, reloadCurrentView]);
 
-    useEffect(() => {
-        appStateRef.current = { query, activeTab, handleSearch, handleTabClick, reloadCurrentView };
-    }, [query, activeTab, handleSearch, handleTabClick, reloadCurrentView]);
 
     useEffect(() => {
         setTimeout(() => {
@@ -135,6 +132,8 @@ function App() {
 
             const result: any = await invoke('cache_dropped_item', { payload: cleanPayload });
 
+            await invoke('set_window_workspace');
+            
             setEditorData({
                 mode: 'create',
                 filePath: result.temp_path,
@@ -232,6 +231,7 @@ function App() {
     }, [processDroppedPayload]);
 
     const handleEditRequest = (sticker: Sticker) => {
+        invoke('set_window_workspace');
         setEditorData({
             mode: 'edit',
             filePath: sticker.path,
