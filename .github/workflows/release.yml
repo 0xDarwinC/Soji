@@ -2,12 +2,6 @@ name: Release
 
 on:
   push:
-    branches: [ "main" ]
-    paths:
-      - 'src-tauri/Cargo.lock'
-      - 'src-tauri/Cargo.toml'
-      - 'package-lock.json'
-      - '.github/workflows/release.yml'
     tags:
       - 'v*'
 
@@ -51,9 +45,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build (Cache Only)
-        if: github.ref == 'refs/heads/main'
-        run: npx tauri build
 
       - name: Generate Release Notes
         id: notes
