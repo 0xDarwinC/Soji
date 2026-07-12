@@ -46,10 +46,10 @@
     - [x] once we know which ones are, the "thumbnails" we generate for them should be gifs
     - [x] to do the above, we should use ffmpeg.
     - [x] the purpose is because discord does not render animated webp as animated
-- [ ] videos -> gif
-    - [ ] the idea is to add video file support
-    - [ ] if video length less than 10 seconds, or the file size is small, etc use some metric
-    - [ ] if so, convert to gif, using our ffmpeg sidecar.
+- [x] videos -> gif
+    - [x] the idea is to add video file support
+    - [x] if video length less than 10 seconds, or the file size is small, etc use some metric
+    - [x] if so, convert to gif, using our ffmpeg sidecar.
 - [ ] help button 
     - [ ] a one-page tutorial that shows how to set it up
     - [ ] credits, contributors, and donate button
@@ -108,8 +108,3 @@ Post-Release Features:
     - [ ] JXL (.jxl): JPEG XL. A newer format that supports both static images and animations natively.
 - [ ] Masonry Layout option
 - [ ] Pretext integration for efficient layout calcs
-
-
-
-Potential features:
-- [ ] gpu acceleration for image indexing?

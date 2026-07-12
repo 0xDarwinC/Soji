@@ -66,6 +66,11 @@ export const StickerEditorModal: React.FC<Props> = ({ data, packs, onClose, onSu
         }
     };
 
+    const isVideo = React.useMemo(() => {
+        const ext = data.filePath.split('.').pop()?.toLowerCase() || '';
+        return ['mp4', 'webm', 'mov'].includes(ext);
+    }, [data.filePath]);
+
     return (
         <div className="editor-overlay" onMouseDown={handleOverlayClick} onContextMenu={e => e.preventDefault()}>
             <div className="editor-modal" onMouseDown={(e) => e.stopPropagation()}>
@@ -73,13 +78,24 @@ export const StickerEditorModal: React.FC<Props> = ({ data, packs, onClose, onSu
                     {data.mode === 'create' ? 'Add New Sticker' : 'Edit Sticker'}
                 </h3>
 
-                {/* IMAGE PREVIEW */}
+                {/* IMAGE/VIDEO PREVIEW */}
                 <div className="editor-preview-container">
-                    <img 
-                        src={convertFileSrc(data.filePath)} 
-                        className="editor-preview-img" 
-                        alt="Preview" 
-                    />
+                    {isVideo ? (
+                        <video 
+                            src={convertFileSrc(data.filePath)} 
+                            className="editor-preview-img" 
+                            autoPlay 
+                            loop 
+                            muted 
+                            playsInline 
+                        />
+                    ) : (
+                        <img 
+                            src={convertFileSrc(data.filePath)} 
+                            className="editor-preview-img" 
+                            alt="Preview" 
+                        />
+                    )}
                 </div>
 
                 {/* NAME INPUT */}
