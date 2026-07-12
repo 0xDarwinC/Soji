@@ -37,7 +37,7 @@
     - [ ] add documentation
 - [x] make window be an offset from cursor like emoji keyboard
     - [x] Perhaps different behavior if cursor not in a textbox.
-    - [ ] If user opens settings, or any edit interaction, switches to workspace mode
+    - [x] If user opens settings, or any edit interaction, switches to workspace mode
 - [x] gif resizing
   - [x] needs to resize with a similar intuition of how we resize images in terms of dimensions
   - [x] need to use rust-ffmpeg or some other derivative
