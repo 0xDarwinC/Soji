@@ -50,8 +50,9 @@ pub fn copy_sticker_to_clipboard(path: &str, thumb_dir: &Path) -> Result<(), Str
 
     // if its an animated format we treat them differently
     // might add more formats in future if required
+    let is_video = ["mp4", "webm", "mov"].contains(&extension.as_str());
     let is_animated = 
-    if extension == "gif"{
+    if is_video || extension == "gif"{
         true
     } else if extension == "webp"{
         crate::utils::is_animated_webp(&path_buf)
