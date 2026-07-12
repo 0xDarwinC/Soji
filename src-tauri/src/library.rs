@@ -42,7 +42,7 @@ fn get_ffmpeg_path() -> PathBuf {
     ffmpeg_path
 }
 
-fn get_video_duration(path: &Path) -> Option<f64> {
+fn get_video_duration(path_or_url: &str) -> Option<f64> {
     let ffmpeg_path = get_ffmpeg_path();
     #[cfg(target_os = "windows")]
     let mut cmd = Command::new(&ffmpeg_path);
@@ -51,7 +51,7 @@ fn get_video_duration(path: &Path) -> Option<f64> {
     #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new(&ffmpeg_path);
 
-    let output = cmd.args(["-i", path.to_str().unwrap()]).output().ok()?;
+    let output = cmd.args(["-i", path_or_url]).output().ok()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     
     // Parse "Duration: 00:00:10.50"
@@ -108,7 +108,7 @@ pub fn index_library(app: &AppHandle, db_path: PathBuf, thumb_dir: PathBuf) {
                                 continue;
                             }
                         }
-                        if let Some(duration) = get_video_duration(&path) {
+                        if let Some(duration) = get_video_duration(&path.to_string_lossy()) {
                             if duration > 15.0 {
                                 continue;
                             }
@@ -304,7 +304,7 @@ fn generate_thumbnail(src_path: &Path, thumb_dir: &Path) -> PathBuf {
         }
         
         let scale_filter = if is_video {
-            "fps=15,scale=160:160:force_original_aspect_ratio=decrease,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string()
+            "fps=15,scale=160:160:force_original_aspect_ratio=increase,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string()
         } else {
             format!("scale={}:{},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", target_width, target_height)
         };
@@ -393,12 +393,23 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
 
     if is_url {
         println!("Attempting to download URL: {}", payload);
+        
+        let ext = payload.split('?').next().unwrap_or("").split('.').last().unwrap_or("").to_lowercase();
+        let is_video_ext = ["mp4", "webm", "mov"].contains(&ext.as_str());
+        if is_video_ext {
+            if let Some(duration) = get_video_duration(&payload) {
+                if duration > 15.0 {
+                    return Err("Video is too long! Limit is 15 seconds.".to_string());
+                }
+            }
+        }
+
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .map_err(|e| e.to_string())?;
 
-        let response = client.get(&payload)
+        let mut response = client.get(&payload)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .send()
             .map_err(|e| format!("Network error: {}", e))?;
@@ -413,14 +424,24 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
             }
         }
 
-        let bytes = response.bytes().map_err(|e| format!("Failed to read bytes: {}", e))?;
-        
-        if bytes.len() as u64 > MAX_STICKER_SIZE {
-            let _ = std::fs::remove_file(&initial_temp_path);
-            return Err(format!("File exceeded size limit of {}MB", MAX_STICKER_SIZE / 1024 / 1024));
+        use std::io::{Read, Write};
+        let mut file = std::fs::File::create(&initial_temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
+        let mut buffer = [0; 8192];
+        let mut total_bytes: u64 = 0;
+
+        loop {
+            let bytes_read = response.read(&mut buffer).map_err(|e| format!("Network read error: {}", e))?;
+            if bytes_read == 0 {
+                break;
+            }
+            total_bytes += bytes_read as u64;
+            if total_bytes > MAX_STICKER_SIZE {
+                drop(file);
+                let _ = std::fs::remove_file(&initial_temp_path);
+                return Err(format!("File exceeded size limit of {}MB", MAX_STICKER_SIZE / 1024 / 1024));
+            }
+            file.write_all(&buffer[..bytes_read]).map_err(|e| format!("Failed to write to temp file: {}", e))?;
         }
-        
-        std::fs::write(&initial_temp_path, &bytes).map_err(|e| format!("Failed to write temp file: {}", e))?;
     } else {
         let clean_path = if payload.starts_with("file:///") {
             payload.replace("file:///", "")
@@ -443,6 +464,16 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
             return Err(format!("Local file too large. Limit is {}MB", MAX_STICKER_SIZE / 1024 / 1024));
         }
 
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let is_video_ext = ["mp4", "webm", "mov"].contains(&ext.as_str());
+        if is_video_ext {
+            if let Some(duration) = get_video_duration(&decoded_path) {
+                if duration > 15.0 {
+                    return Err("Video is too long! Limit is 15 seconds.".to_string());
+                }
+            }
+        }
+
         std::fs::copy(path, &initial_temp_path).map_err(|e| format!("Failed to copy local file: {}", e))?;
     }
 
@@ -454,9 +485,25 @@ pub fn cache_dropped_item(app: tauri::AppHandle, payload: String) -> Result<serd
     let detected_ext = kind.extension();
 
     println!("Detected mime: {}, ext: {}", mime, detected_ext);
-    if !mime.starts_with("image/") || mime == "image/svg+xml" {
+    
+    let is_video = mime.starts_with("video/");
+    let is_image = mime.starts_with("image/") && mime != "image/svg+xml";
+
+    if !is_image && !is_video {
          let _ = std::fs::remove_file(&initial_temp_path);
-         return Err(format!("Invalid file type: {}. Only raster images (PNG, JPG, GIF, WEBP) are supported.", mime));
+         return Err(format!("Invalid file type: {}. Only raster images and videos are supported.", mime));
+    }
+
+    if is_video {
+        if let Some(duration) = get_video_duration(&initial_temp_path.to_string_lossy()) {
+            if duration > 15.0 {
+                let _ = std::fs::remove_file(&initial_temp_path);
+                return Err("Video is too long! Limit is 15 seconds.".to_string());
+            }
+        } else {
+            let _ = std::fs::remove_file(&initial_temp_path);
+            return Err("Failed to determine video duration.".to_string());
+        }
     }
 
     let final_temp_path = temp_dir.join(format!("{}.{}", temp_id, detected_ext));
