@@ -82,6 +82,7 @@ Bugs:
 - [x] when drag/drop or ctrlv a new image to open editor, window doesnt resize to default
 - [x] when renaming a file outside of the app, the thumbnail appears as a missing image. it still works, but the preview does not update. This is because the preview is cached. We should update the preview when the file is renamed.
 - [x] able to highlight text in the app, should be disabled.
+- [ ] sometimes, the user's clipboard content is not preserved after pasting a sticker.
  
 
 Test:
