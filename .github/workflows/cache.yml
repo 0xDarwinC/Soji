@@ -23,8 +23,18 @@ jobs:
         with:
           workspaces: src-tauri
           shared-key: "release"
-          cache-targets: "true"
-          cache-all-crates: "true"
+
+      - name: Sync node version
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
 
       - name: Pre-compile dependencies
         working-directory: src-tauri
