@@ -33,8 +33,6 @@ jobs:
         with:
           workspaces: src-tauri
           shared-key: "release"
-          cache-targets: "true"
-          cache-all-crates: "true"
 
       - name: Sync node version
         uses: actions/setup-node@v4
